@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Mradhul Fashion",
+    "slug": "mradhul-fashion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121214"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#121214"
+      },
+      "package": "com.mradhul.fashion"
+    },
+    "web": {
+      "favicon": "./assets/icon.png"
+    }
+  }
+}
