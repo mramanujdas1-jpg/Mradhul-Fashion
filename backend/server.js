@@ -1,7 +1,7 @@
 const dotenv = require('dotenv');
 dotenv.config();
 
-console.log('Environment MONGO_URI loaded at startup:', process.env.MONGO_URI);
+console.log('MONGO_URI:', process.env.MONGO_URI ? 'LOADED' : 'NOT FOUND');
 
 const express = require('express');
 const mongoose = require('mongoose');
