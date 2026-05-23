@@ -1,7 +1,11 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
+console.log('Environment MONGO_URI loaded at startup:', process.env.MONGO_URI);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const dotenv = require('dotenv');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -12,7 +16,6 @@ const adminRoutes = require('./routes/adminRoutes');
 const bannerRoutes = require('./routes/bannerRoutes');
 const couponRoutes = require('./routes/couponRoutes');
 
-dotenv.config();
 
 const app = express();
 
@@ -58,7 +61,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/mradhul_fashion';
 
-console.log('Connecting to database...');
+console.log('Connecting to database using URI:', MONGO_URI);
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('MongoDB connection established successfully.');
