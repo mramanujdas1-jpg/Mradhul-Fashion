@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "781675673510",
+    "project_id": "mradhul-fashion",
+    "storage_bucket": "mradhul-fashion.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:781675673510:android:b79f8f8ffad26b679e8167",
+        "android_client_info": {
+          "package_name": "com.mradhul.fashion"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "781675673510-6hvaqpd92cd51g162cpfg1krbdegh1fq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJr7H6AeNMXT7L9EUlXkpbupjZ4RTra20"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "781675673510-6hvaqpd92cd51g162cpfg1krbdegh1fq.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

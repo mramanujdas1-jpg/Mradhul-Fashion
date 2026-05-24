@@ -39,39 +39,8 @@ export default function ProfileScreen({ navigation }) {
         throw new Error('Failed to fetch');
       }
     } catch (e) {
-      console.warn('Backend server offline. Showing mock order tracking history.');
-      // Populate with realistic mock orders matching brand guidelines
-      setOrders([
-        {
-          _id: 'ord123',
-          createdAt: '2026-05-22T10:00:00.000Z',
-          totalPrice: 4718,
-          status: 'Shipped',
-          paymentMethod: 'Razorpay',
-          isPaid: true,
-          orderItems: [
-            {
-              name: 'Royale Jaipur Gota Patti Saree',
-              qty: 1,
-              size: 'Free Size',
-              price: 14999,
-              image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500'
-            },
-            {
-              name: 'Heritage Leheriya Silk Anarkali',
-              qty: 1,
-              size: 'M',
-              price: 11999,
-              image: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=500'
-            }
-          ],
-          trackingSteps: [
-            { status: 'Pending', description: 'Order received and confirmed', timestamp: '2026-05-22T10:00:00Z' },
-            { status: 'Processing', description: 'Quality inspection & packaging completed', timestamp: '2026-05-22T14:30:00Z' },
-            { status: 'Shipped', description: 'In-transit via BlueDart (AWB: MRDF89304)', timestamp: '2026-05-23T08:00:00Z' }
-          ]
-        }
-      ]);
+      setOrders([]);
+      Alert.alert('Orders Unavailable', 'Unable to load your live order history right now.');
     } finally {
       setOrdersLoading(false);
     }
@@ -82,81 +51,54 @@ export default function ProfileScreen({ navigation }) {
       Alert.alert('Validation Error', 'Please fill in all credentials.');
       return;
     }
+ 
+    const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+    if (!apiKey) {
+      Alert.alert('Configuration Error', 'Firebase Auth API Key (EXPO_PUBLIC_FIREBASE_API_KEY) is not set in environment variables.');
+      return;
+    }
 
     setAuthLoading(true);
-    const endpoint = isLogin ? '/users/login' : '/users/register';
-    const body = isLogin ? { email, password } : { name, email, password };
-
+    const endpoint = isLogin
+      ? `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`
+      : `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`;
+ 
     try {
-      const res = await fetch(`${API_HOST}${endpoint}`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, returnSecureToken: true })
       });
-
+ 
       if (res.ok) {
-        const data = await res.json();
-        login(data);
-        Alert.alert('Welcome Back!', `Logged in successfully as ${data.name}`);
-      } else {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Authentication failed');
-      }
-    } catch (err) {
-      console.warn('Backend server offline. Performing demo mode fallback.');
-      // Demo logic fallback
-      if (isLogin) {
-        if (email.toLowerCase() === 'customer@mradhulfashion.com' && password === 'user123') {
-          login({
-            _id: 'mock_cust_id',
-            name: 'Sample Customer',
-            email: 'customer@mradhulfashion.com',
-            role: 'customer',
-            token: 'mock_jwt_token',
-            addresses: [
-              {
-                name: 'Devi Sharma',
-                phone: '9998887776',
-                streetAddress: 'Flat 402, Royal Residency, C-Scheme',
-                city: 'Jaipur',
-                state: 'Rajasthan',
-                postalCode: '302001',
-                isDefault: true
-              }
-            ]
-          });
-          Alert.alert('Demo Login Successful', 'Logged in as Sample Customer (Demo Mode)');
-        } else if (email.toLowerCase() === 'admin@mradhulfashion.com' && password === 'admin123') {
-          login({
-            _id: 'mock_admin_id',
-            name: 'Mradhul Admin',
-            email: 'admin@mradhulfashion.com',
-            role: 'admin',
-            token: 'mock_jwt_token_admin',
-            addresses: []
-          });
-          Alert.alert('Demo Admin Login', 'Welcome Admin. Admin dashboard dashboard is available on the web portal.');
+        const fbData = await res.json();
+        // Sync with the backend MongoDB using Firebase ID Token
+        const syncRes = await fetch(`${API_HOST}/auth/sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${fbData.idToken}`
+          },
+          body: JSON.stringify({
+            cart: [],
+            wishlist: []
+          })
+        });
+ 
+        if (syncRes.ok) {
+          const userData = await syncRes.json();
+          login({ ...userData, token: fbData.idToken });
+          Alert.alert('Success', `Logged in successfully as ${userData.name}`);
         } else {
-          Alert.alert(
-            'Auth Error',
-            'Incorrect email or password. Use demo account:\n\nEmail: customer@mradhulfashion.com\nPassword: user123'
-          );
+          const errData = await syncRes.json();
+          throw new Error(errData.message || 'Failed to sync with backend');
         }
       } else {
-        // Mock sign up success
-        const mockNewUser = {
-          _id: 'new_user_id',
-          name,
-          email,
-          role: 'customer',
-          token: 'mock_jwt_token_new',
-          addresses: []
-        };
-        login(mockNewUser);
-        Alert.alert('Welcome!', `Account created successfully for ${name} (Demo Mode)`);
+        const fbErr = await res.json();
+        throw new Error(fbErr.error?.message || 'Authentication failed');
       }
+    } catch (err) {
+      Alert.alert('Authentication Error', err.message);
     } finally {
       setAuthLoading(false);
     }
@@ -178,7 +120,7 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.formLabel}>Full Name</Text>
               <TextInput
                 style={styles.authInput}
-                placeholder="Mradhul Sharma"
+                placeholder="Your Name"
                 placeholderTextColor="#8E8E93"
                 value={name}
                 onChangeText={setName}
@@ -189,7 +131,7 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.formLabel}>Email Address</Text>
           <TextInput
             style={styles.authInput}
-            placeholder="customer@mradhulfashion.com"
+            placeholder="you@example.com"
             placeholderTextColor="#8E8E93"
             value={email}
             onChangeText={setEmail}

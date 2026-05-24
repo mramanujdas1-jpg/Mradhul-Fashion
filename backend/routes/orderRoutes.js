@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Order, Product } = require('../models');
 const { protect, admin } = require('../auth');
+const { notifyOrderStatusChange } = require('../services/notificationService');
 const Razorpay = require('razorpay');
 
 let razorpayInstance;
@@ -13,7 +14,7 @@ try {
     });
   }
 } catch (error) {
-  console.error('Razorpay SDK initialization failed, payment creation will run in Mock Mode.', error.message);
+  console.error('Razorpay SDK initialization failed:', error.message);
 }
 
 // Create New Order
@@ -33,6 +34,18 @@ router.post('/', protect, async (req, res) => {
   }
 
   try {
+    for (const item of orderItems) {
+      const product = await Product.findById(item.product);
+      if (!product) {
+        return res.status(404).json({ message: `Product not found: ${item.name || item.product}` });
+      }
+      if (product.stock < item.qty) {
+        return res.status(400).json({
+          message: `${product.name} has only ${product.stock} item${product.stock === 1 ? '' : 's'} available.`
+        });
+      }
+    }
+
     const order = new Order({
       user: req.user._id,
       orderItems,
@@ -61,11 +74,7 @@ router.post('/', protect, async (req, res) => {
           status: 'Created'
         };
       } else {
-        // Mock Mode if keys are not set
-        order.paymentResult = {
-          id: `mock_rzp_id_${Math.random().toString(36).substr(2, 9)}`,
-          status: 'Created'
-        };
+        return res.status(503).json({ message: 'Razorpay is not configured for prepaid checkout.' });
       }
     }
 
@@ -86,29 +95,54 @@ router.post('/', protect, async (req, res) => {
 
 // Update Order Payment to Paid
 router.put('/:id/pay', protect, async (req, res) => {
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
   try {
     const order = await Order.findById(req.params.id);
-    if (order) {
-      order.isPaid = true;
-      order.paidAt = Date.now();
-      order.status = 'Processing';
-      order.paymentResult = {
-        id: req.body.razorpay_payment_id || req.body.id || order.paymentResult.id,
-        status: 'Paid',
-        update_time: Date.now().toString(),
-        email_address: req.user.email
-      };
-
-      order.trackingSteps.push({
-        status: 'Processing',
-        description: 'Payment verified. Order is being packed in our warehouse.'
-      });
-
-      const updatedOrder = await order.save();
-      res.json(updatedOrder);
-    } else {
-      res.status(404).json({ message: 'Order not found' });
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
     }
+
+    // Cryptographic signature check
+    if (process.env.RAZORPAY_KEY_SECRET) {
+      if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+        return res.status(400).json({ message: 'Missing signature verification parameters' });
+      }
+      
+      const crypto = require('crypto');
+      const expectedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+
+      if (expectedSignature !== razorpay_signature) {
+        return res.status(400).json({ message: 'Payment signature verification failed' });
+      }
+    } else {
+      return res.status(503).json({ message: 'Razorpay signature verification is not configured.' });
+    }
+
+    order.isPaid = true;
+    order.paidAt = Date.now();
+    order.status = 'Processing';
+    order.paymentResult = {
+      id: razorpay_payment_id,
+      status: 'Paid',
+      update_time: Date.now().toString(),
+      email_address: req.user.email
+    };
+
+    order.trackingSteps.push({
+      status: 'Processing',
+      description: 'Payment verified. Order is being packed in our warehouse.'
+    });
+
+    const updatedOrder = await order.save();
+
+    await updatedOrder.populate('user');
+    notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});
+
+    res.json(updatedOrder);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -171,10 +205,97 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       });
 
       const updatedOrder = await order.save();
+      
+      // Notify user asynchronously
+      await updatedOrder.populate('user');
+      notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});
+
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Order not found' });
     }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// User: Cancel Order (Only if Pending or Processing)
+router.put('/:id/cancel', protect, async (req, res) => {
+  const { reason } = req.body;
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Verify ownership
+    if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    if (order.status !== 'Pending' && order.status !== 'Processing') {
+      return res.status(400).json({ message: 'Order cannot be cancelled after shipment.' });
+    }
+
+    order.status = 'Cancelled';
+    order.trackingSteps.push({
+      status: 'Cancelled',
+      description: `Order cancelled by customer. Reason: ${reason || 'Customer request'}`
+    });
+
+    // Restore stock levels
+    for (const item of order.orderItems) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { stock: item.qty }
+      });
+    }
+
+    const updatedOrder = await order.save();
+    
+    // Notify user asynchronously
+    await updatedOrder.populate('user');
+    notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});
+
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// User: Request Return (Only if Delivered, within 7 days)
+router.put('/:id/return', protect, async (req, res) => {
+  const { reason, comment } = req.body;
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Verify ownership
+    if (order.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    if (order.status !== 'Delivered') {
+      return res.status(400).json({ message: 'Order must be delivered before requesting a return.' });
+    }
+
+    // Check 7 days limit
+    const returnLimit = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    if (order.deliveredAt && (Date.now() - new Date(order.deliveredAt).getTime() > returnLimit)) {
+      return res.status(400).json({ message: 'Return period (7 days) has expired.' });
+    }
+
+    order.status = 'Return Requested';
+    order.trackingSteps.push({
+      status: 'Return Requested',
+      description: `Customer requested a return. Reason: ${reason}. Comments: ${comment || 'None'}`
+    });
+
+    const updatedOrder = await order.save();
+    await updatedOrder.populate('user');
+    notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});
+    res.json(updatedOrder);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

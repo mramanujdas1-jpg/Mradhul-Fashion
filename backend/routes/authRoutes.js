@@ -1,60 +1,104 @@
 const express = require('express');
 const router = express.Router();
-const bcrypt = require('bcryptjs');
 const { User } = require('../models');
-const { generateToken, protect } = require('../auth');
+const { protect } = require('../auth');
 
-// Register User
-router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
+// Sync User Profile (called after successful Firebase Auth on client)
+router.post('/sync', protect, async (req, res) => {
   try {
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
+    const { cart: clientCart, wishlist: clientWishlist } = req.body;
+    const user = req.user;
+    
+    // 1. Merge Wishlist
+    if (Array.isArray(clientWishlist)) {
+      clientWishlist.forEach(productId => {
+        const idStr = productId._id || productId;
+        if (idStr && !user.wishlist.some(id => id.toString() === idStr.toString())) {
+          user.wishlist.push(idStr);
+        }
+      });
     }
+    
+    // 2. Merge Cart
+    if (Array.isArray(clientCart)) {
+      clientCart.forEach(clientItem => {
+        if (!clientItem.product) return;
+        const existingIdx = user.cart.findIndex(
+          dbItem => dbItem.product.toString() === clientItem.product.toString() && dbItem.size === clientItem.size
+        );
+        if (existingIdx > -1) {
+          user.cart[existingIdx].qty = Math.max(user.cart[existingIdx].qty, clientItem.qty);
+        } else {
+          user.cart.push({
+            product: clientItem.product,
+            qty: clientItem.qty,
+            size: clientItem.size
+          });
+        }
+      });
+    }
+    
+    await user.save();
+    
+    // Populate product details in user cart/wishlist
+    const populatedUser = await User.findById(user._id)
+      .populate('cart.product')
+      .populate('wishlist');
+      
+    // Format populated cart items
+    const formattedCart = (populatedUser.cart || []).map(item => {
+      if (!item.product) return null;
+      return {
+        product: item.product._id,
+        name: item.product.name,
+        qty: item.qty,
+        image: item.product.images[0],
+        price: item.product.discountPrice || item.product.price,
+        size: item.size
+      };
+    }).filter(Boolean);
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Make the first user an Admin for testing ease, otherwise customer
-    const userCount = await User.countDocuments({});
-    const role = userCount === 0 ? 'admin' : 'customer';
-
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role
-    });
-
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id)
+    res.status(200).json({
+      _id: populatedUser._id,
+      name: populatedUser.name,
+      email: populatedUser.email,
+      role: populatedUser.role,
+      addresses: populatedUser.addresses || [],
+      wishlist: populatedUser.wishlist || [],
+      cart: formattedCart
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Login User
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+// Update persistent Cart in database
+router.post('/cart', protect, async (req, res) => {
   try {
-    const user = await User.findOne({ email });
-    if (user && (await bcrypt.compare(password, user.password))) {
-      res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id)
-      });
-    } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+    const { cart } = req.body;
+    if (Array.isArray(cart)) {
+      req.user.cart = cart.map(item => ({
+        product: item.product,
+        qty: item.qty,
+        size: item.size
+      }));
+      await req.user.save();
     }
+    res.json(req.user.cart);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update persistent Wishlist in database
+router.post('/wishlist', protect, async (req, res) => {
+  try {
+    const { wishlist } = req.body;
+    if (Array.isArray(wishlist)) {
+      req.user.wishlist = wishlist.map(item => item._id || item);
+      await req.user.save();
+    }
+    res.json(req.user.wishlist);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -76,18 +120,17 @@ router.put('/profile', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     if (user) {
       user.name = req.body.name || user.name;
+      // Allow updating email only if it matches Firebase account email updates
       user.email = req.body.email || user.email;
-      if (req.body.password) {
-        const salt = await bcrypt.genSalt(10);
-        user.password = await bcrypt.hash(req.body.password, salt);
-      }
-      const updatedUser = await User.save();
+      
+      const updatedUser = await user.save();
       res.json({
         _id: updatedUser._id,
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
-        token: generateToken(updatedUser._id)
+        addresses: updatedUser.addresses || [],
+        wishlist: updatedUser.wishlist || []
       });
     } else {
       res.status(404).json({ message: 'User not found' });
@@ -97,7 +140,7 @@ router.put('/profile', protect, async (req, res) => {
   }
 });
 
-// Address Management
+// Address Management - Add Address
 router.post('/addresses', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);

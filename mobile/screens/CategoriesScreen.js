@@ -4,29 +4,14 @@ import { useMobile } from '../context';
 
 const { width } = Dimensions.get('window');
 
-const fallbackCategories = [
-  { _id: 'cat1', name: 'Handcrafted Sarees', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400' },
-  { _id: 'cat2', name: 'Designer Lehengas', image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400' },
-  { _id: 'cat3', name: 'Royal Anarkalis', image: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=400' },
-  { _id: 'cat4', name: 'Jaipur Fusion Wear', image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=400' },
-  { _id: 'cat5', name: 'Bridal & Festive', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400' },
-  { _id: 'cat6', name: 'Artisan Jackets & Dupattas', image: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400' }
-];
-
-const fallbackProducts = [
-  { _id: 'p1', name: 'Royale Jaipur Gota Patti Saree', description: 'A breathtaking royal georgette saree hand-embellished by Jaipur artisans. Gota Patti border work.', price: 18999, discountPrice: 14999, category: 'Handcrafted Sarees', images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500'], sizes: ['Free Size'], rating: 4.9, isTrending: true },
-  { _id: 'p2', name: 'Heritage Leheriya Silk Anarkali', description: 'Royal tie-dye Leheriya Anarkali suit set in pure Banarasi silk. Mirror embroidery.', price: 14499, discountPrice: 11999, category: 'Royal Anarkalis', images: ['https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=500'], sizes: ['S', 'M', 'L', 'XL'], rating: 4.8, isTrending: true },
-  { _id: 'p3', name: 'Shahi Zardozi Bridal Lehenga', description: 'Pure mulberry raw silk bridal lehenga with heavy gold dori and meenakari beads.', price: 49999, discountPrice: 42999, category: 'Bridal & Festive', images: ['https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=500'], sizes: ['S', 'M', 'L'], rating: 5.0, isTrending: true },
-  { _id: 'p4', name: 'Sanganeri Print Palazzo Set', description: 'Traditional Sanganeri printed peplum top with light floating palazzo.', price: 8999, discountPrice: 6999, category: 'Jaipur Fusion Wear', images: ['https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=500'], sizes: ['S', 'M', 'L', 'XL'], rating: 4.5, isFlashSale: true }
-];
-
 export default function CategoriesScreen({ route, navigation }) {
   const { API_HOST } = useMobile();
-  const [categories, setCategories] = useState(fallbackCategories);
-  const [products, setProducts] = useState(fallbackProducts);
-  const [selectedCategory, setSelectedCategory] = useState('Handcrafted Sarees');
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [networkError, setNetworkError] = useState('');
 
   // Read params if passed from Home
   useEffect(() => {
@@ -38,10 +23,14 @@ export default function CategoriesScreen({ route, navigation }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setNetworkError('');
         const catRes = await fetch(`${API_HOST}/categories`);
         if (catRes.ok) {
           const catData = await catRes.json();
-          if (catData.length) setCategories(catData);
+          if (catData.length) {
+            setCategories(catData);
+            setSelectedCategory(prev => prev || catData[0].name);
+          }
         }
         const prodRes = await fetch(`${API_HOST}/products`);
         if (prodRes.ok) {
@@ -49,7 +38,9 @@ export default function CategoriesScreen({ route, navigation }) {
           if (prodData.products && prodData.products.length) setProducts(prodData.products);
         }
       } catch (e) {
-        console.warn('Backend server offline. Rendering default mock categories.');
+        setNetworkError('Unable to load live catalog categories. Please try again shortly.');
+        setCategories([]);
+        setProducts([]);
       } finally {
         setLoading(false);
       }

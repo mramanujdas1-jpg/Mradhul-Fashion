@@ -15,10 +15,17 @@ const addressSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
+  password: { type: String }, // Optional for OAuth/Firebase users
+  firebaseUid: { type: String, unique: true, sparse: true },
   role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
   addresses: [addressSchema],
-  wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }]
+  wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+  cart: [{
+    product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+    qty: { type: Number, required: true, default: 1 },
+    size: { type: String, required: true }
+  }],
+  fcmTokens: [{ type: String }]
 }, { timestamps: true });
 
 // Category Schema
@@ -41,7 +48,15 @@ const productSchema = new mongoose.Schema({
   numReviews: { type: Number, default: 0 },
   isTrending: { type: Boolean, default: false },
   isFlashSale: { type: Boolean, default: false },
-  flashSaleEndsAt: { type: Date }
+  flashSaleEndsAt: { type: Date },
+  brand: { type: String, required: true, default: 'Mradhul' },
+  subcategory: { type: String },
+  colors: [{ type: String }],
+  specifications: [{ key: String, value: String }],
+  fabricMaterial: { type: String },
+  sku: { type: String, unique: true, sparse: true },
+  deliveryInfo: { type: String },
+  returnPolicy: { type: String }
 }, { timestamps: true });
 
 // Review Schema
@@ -50,7 +65,11 @@ const reviewSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
   rating: { type: Number, required: true, min: 1, max: 5 },
-  comment: { type: String, required: true }
+  comment: { type: String, required: true },
+  images: [{ type: String }],
+  verifiedPurchase: { type: Boolean, default: false },
+  helpfulCount: { type: Number, default: 0 },
+  helpfulUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 // Order Schema
@@ -95,7 +114,7 @@ const orderSchema = new mongoose.Schema({
   deliveredAt: { type: Date },
   status: { 
     type: String, 
-    enum: ['Pending', 'Processing', 'Shipped', 'Out For Delivery', 'Delivered', 'Cancelled'], 
+    enum: ['Pending', 'Processing', 'Shipped', 'Out For Delivery', 'Delivered', 'Cancelled', 'Return Requested', 'Returned'], 
     default: 'Pending' 
   },
   trackingSteps: [trackingStepSchema]

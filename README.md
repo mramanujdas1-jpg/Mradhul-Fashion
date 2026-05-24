@@ -7,7 +7,7 @@ Mradhul Fashion is a state-of-the-art, premium fashion e-commerce platform inspi
 ## 🌟 Core Features
 
 - **Luxury Branding System**: Implements a curated crimson-red (`#E01A4F`) and metallic gold (`#D4AF37`) color palette, custom logo, typography, and styling assets.
-- **Offline Demo Mode**: Both the frontend web portal and the mobile application can operate completely offline with simulated mock databases if the backend server is not connected.
+- **Production API First**: Web and mobile clients synchronize through the shared Express API with Firebase Authentication verification.
 - **Dynamic Category & Search Navigation**: Responsive sidebar layouts, size/price/gender catalog filters, and instant auto-filtering search bars.
 - **Comprehensive Cart & Promotions**: In-bag quantity modifications, flat-rate and value-based free shipping thresholds, and coupon code support (`WELCOME50`, `FESTIVE20`, `MRADHUL10`).
 - **Interactive Checkout Flow**: Support for Cash on Delivery (COD) and a fully simulated Razorpay payment gateway.
@@ -76,10 +76,9 @@ cd backend
 npm run seed
 ```
 > This initializes:
-> 1. Default admin account: `admin@mradhulfashion.com` / `admin123`
-> 2. Default customer account: `customer@mradhulfashion.com` / `user123`
-> 3. Initial categories and dummy fashion products.
-> 4. Active promotional coupons (`WELCOME50`, `FESTIVE20`, `MRADHUL10`).
+> 1. Premium women's heritage fashion categories (Sarees, Lehengas, Anarkalis, Fusion Wear, Jackets & Dupattas).
+> 2. Curated handpicked Jaipur ethnic wear products.
+> 3. Active promotional storefront banners.
 
 ### Step 4: Run Services
 Launch all three applications in separate terminal windows:
@@ -88,14 +87,14 @@ Launch all three applications in separate terminal windows:
 ```bash
 cd backend
 npm run dev
-# Starts server at http://localhost:5000
+# Starts the API using the configured PORT and MONGO_URI
 ```
 
 #### 2. Next.js Frontend:
 ```bash
 cd web
 npm run dev
-# Starts web portal at http://localhost:3000
+# Starts the Next.js development server
 ```
 
 #### 3. React Native Mobile App:
@@ -118,7 +117,7 @@ npm run android  # Or npm run ios / npm start
 
 ## 🚀 Deployment
 
-Refer to the complete deployment configuration instructions in [DEPLOYMENT.md](file:///C:/Users/user/.gemini/antigravity/scratch/mradhul-fashion/DEPLOYMENT.md) for details on:
+Refer to the complete deployment configuration instructions in [DEPLOYMENT.md](file:///d:/mradhul-fashion/DEPLOYMENT.md) for details on:
 - Setting up the backend on Render.
 - Setting up the frontend Next.js application on Vercel.
 - Building sideloadable `.apk` mobile packages via EAS Build CLI.

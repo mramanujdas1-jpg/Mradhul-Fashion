@@ -45,6 +45,12 @@ router.get('/analytics', protect, admin, async (req, res) => {
       sales: salesByDate[date]
     })).sort((a, b) => a.date.localeCompare(b.date));
 
+    // Low stock alerts (stock < 5)
+    const lowStockProducts = await Product.find({ stock: { $lt: 5 } }).select('name stock');
+    
+    // Pending Orders List
+    const pendingOrders = orders.filter(o => o.status === 'Pending').map(o => ({ _id: o._id, createdAt: o.createdAt, totalPrice: o.totalPrice }));
+
     res.json({
       summary: {
         totalProducts,
@@ -53,7 +59,11 @@ router.get('/analytics', protect, admin, async (req, res) => {
         totalSales
       },
       salesByDate: formattedSalesByDate,
-      orderStatusCount
+      orderStatusCount,
+      alerts: {
+        lowStockProducts,
+        pendingOrders
+      }
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -76,7 +86,9 @@ router.put('/users/:id/role', protect, admin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (user) {
-      if (user.email === 'admin@mradhulfashion.com') {
+      const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+      const primaryAdminEmail = adminEmails[0];
+      if (primaryAdminEmail && user.email.toLowerCase() === primaryAdminEmail) {
         return res.status(400).json({ message: 'Primary admin role cannot be changed' });
       }
       user.role = role || user.role;

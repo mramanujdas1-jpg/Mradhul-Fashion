@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../app/context';
 import { ShoppingBag, Heart, User, Sun, Moon, Search, Menu, X, ShieldAlert } from 'lucide-react';
@@ -54,7 +55,14 @@ export default function Navbar() {
           </button>
 
           <Link href="/" className="flex items-center gap-2">
-            <img src="/logo.png" alt="Mradhul Fashion Logo" className="h-12 w-12 object-contain rounded-full border border-brand-gold/30" />
+            <Image
+              src="/logo.png"
+              alt="Mradhul Fashion Logo"
+              width={48}
+              height={48}
+              priority
+              className="h-12 w-12 object-contain rounded-full border border-brand-gold/30"
+            />
             <div className="hidden sm:block">
               <span className="font-serif text-lg font-bold tracking-widest text-brand-primary dark:text-white uppercase block leading-none">
                 Mradhul

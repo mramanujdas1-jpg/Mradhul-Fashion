@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Facebook, Instagram, Twitter, ShieldCheck, Truck, RotateCcw } from 'lucide-react';
 
 export default function Footer() {
@@ -12,7 +13,13 @@ export default function Footer() {
         {/* Brand Information */}
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Mradhul Fashion" className="h-10 w-10 object-contain rounded-full border border-brand-gold/30" />
+            <Image
+              src="/logo.png"
+              alt="Mradhul Fashion"
+              width={40}
+              height={40}
+              className="h-10 w-10 object-contain rounded-full border border-brand-gold/30"
+            />
             <div>
               <span className="font-serif text-lg font-bold tracking-widest text-brand-primary uppercase block leading-none">
                 Mradhul

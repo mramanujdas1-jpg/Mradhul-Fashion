@@ -8,12 +8,14 @@ import { RefreshCcw, Plus, Edit3, Trash2, ArrowLeft, X } from 'lucide-react';
 
 import { API_BASE } from '../../config';
 
-const fallbackProducts = [
-  { _id: 'p1', name: 'Royale Banarasi Silk Saree', price: 4999, discountPrice: 2999, category: 'Ethnic Wear', stock: 25, rating: 4.8 },
-  { _id: 'p2', name: 'Designer Anarkali Suit Set', price: 3499, discountPrice: 1999, category: 'Ethnic Wear', stock: 15, rating: 4.5 }
+const categoriesList = [
+  'Handcrafted Sarees',
+  'Designer Lehengas',
+  'Royal Anarkalis',
+  'Jaipur Fusion Wear',
+  'Bridal & Festive',
+  'Artisan Jackets & Dupattas'
 ];
-
-const categoriesList = ['Men', 'Women', 'Ethnic Wear', 'Western Wear', 'Kids Wear'];
 
 export default function AdminProductsPage() {
   const router = useRouter();
@@ -24,18 +26,26 @@ export default function AdminProductsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   // Editor form parameters
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formDiscountPrice, setFormDiscountPrice] = useState('');
-  const [formCategory, setFormCategory] = useState('Ethnic Wear');
+  const [formCategory, setFormCategory] = useState('Handcrafted Sarees');
   const [formStock, setFormStock] = useState('');
   const [formSizes, setFormSizes] = useState(['S', 'M', 'L', 'XL']);
   const [formImages, setFormImages] = useState(['/logo.png']);
   const [formTrending, setFormTrending] = useState(false);
   const [formFlashSale, setFormFlashSale] = useState(false);
+  const [formBrand, setFormBrand] = useState('Mradhul Jaipur');
+  const [formSubcategory, setFormSubcategory] = useState('');
+  const [formColors, setFormColors] = useState('');
+  const [formFabric, setFormFabric] = useState('');
+  const [formSku, setFormSku] = useState('');
+  const [formDelivery, setFormDelivery] = useState('');
+  const [formReturn, setFormReturn] = useState('');
 
   const fetchCatalog = async () => {
     if (!user || user.role !== 'admin') {
@@ -51,8 +61,8 @@ export default function AdminProductsPage() {
         setProducts(data.products || []);
       }
     } catch (err) {
-      console.warn('API connection failed. Using fallback catalog list.');
-      setProducts(fallbackProducts);
+      setErrorMsg('Unable to load the live catalog. Check API availability and admin authentication.');
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -68,12 +78,19 @@ export default function AdminProductsPage() {
     setFormDesc('');
     setFormPrice('');
     setFormDiscountPrice('');
-    setFormCategory('Ethnic Wear');
+    setFormCategory('Handcrafted Sarees');
     setFormStock('');
     setFormSizes(['S', 'M', 'L', 'XL']);
     setFormImages(['/logo.png']);
     setFormTrending(false);
     setFormFlashSale(false);
+    setFormBrand('Mradhul Jaipur');
+    setFormSubcategory('');
+    setFormColors('');
+    setFormFabric('');
+    setFormSku('');
+    setFormDelivery('');
+    setFormReturn('');
     setEditorOpen(true);
   };
 
@@ -89,7 +106,63 @@ export default function AdminProductsPage() {
     setFormImages(prod.images || ['/logo.png']);
     setFormTrending(prod.isTrending || false);
     setFormFlashSale(prod.isFlashSale || false);
+    setFormBrand(prod.brand || 'Mradhul Jaipur');
+    setFormSubcategory(prod.subcategory || '');
+    setFormColors((prod.colors || []).join(', '));
+    setFormFabric(prod.fabricMaterial || '');
+    setFormSku(prod.sku || '');
+    setFormDelivery(prod.deliveryInfo || '');
+    setFormReturn(prod.returnPolicy || '');
     setEditorOpen(true);
+  };
+
+  const handleImageUploads = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    setUploading(true);
+    setErrorMsg('');
+
+    try {
+      const token = localStorage.getItem('mf_auth_token');
+      const uploadedUrls = [];
+
+      for (const file of files) {
+        const base64Str = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (err) => reject(err);
+        });
+
+        const res = await fetch(`${API_BASE}/upload`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ image: base64Str })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          uploadedUrls.push(data.url);
+        } else {
+          const data = await res.json();
+          throw new Error(data.message || 'Image upload failed');
+        }
+      }
+
+      setFormImages(prev => {
+        const base = prev.filter(img => img !== '/logo.png');
+        return [...base, ...uploadedUrls];
+      });
+      setErrorMsg('');
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to upload one or more images.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleFormSubmit = async (e) => {
@@ -110,7 +183,14 @@ export default function AdminProductsPage() {
       sizes: formSizes,
       images: formImages,
       isTrending: formTrending,
-      isFlashSale: formFlashSale
+      isFlashSale: formFlashSale,
+      brand: formBrand,
+      subcategory: formSubcategory,
+      colors: formColors ? formColors.split(',').map(c => c.trim()) : [],
+      fabricMaterial: formFabric,
+      sku: formSku || undefined,
+      deliveryInfo: formDelivery,
+      returnPolicy: formReturn
     };
 
     const method = editingProduct ? 'PUT' : 'POST';
@@ -121,7 +201,7 @@ export default function AdminProductsPage() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify(payload)
       });
@@ -133,13 +213,7 @@ export default function AdminProductsPage() {
         setErrorMsg(data.message || 'Operation failed.');
       }
     } catch (err) {
-      console.warn('Running offline mock CRUD update.');
-      if (editingProduct) {
-        setProducts(prev => prev.map(p => p._id === editingProduct._id ? { ...p, ...payload } : p));
-      } else {
-        setProducts(prev => [...prev, { _id: `p_mock_${Date.now()}`, ...payload }]);
-      }
-      setEditorOpen(false);
+      setErrorMsg('Unable to save this product right now. Please try again.');
     }
   };
 
@@ -148,14 +222,13 @@ export default function AdminProductsPage() {
     try {
       const res = await fetch(`${API_BASE}/products/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (res.ok) {
         fetchCatalog();
       }
     } catch (err) {
-      console.warn('Running offline mock CRUD deletion.');
-      setProducts(prev => prev.filter(p => p._id !== id));
+      setErrorMsg('Unable to delete this product right now. Please try again.');
     }
   };
 
@@ -289,6 +362,46 @@ export default function AdminProductsPage() {
                 />
               </div>
 
+              {/* Product Images Uploader */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 uppercase font-bold">Product Images</label>
+                <div className="flex flex-col gap-2 p-3 border border-black/10 dark:border-white/10 rounded-xl bg-transparent">
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleImageUploads}
+                    className="hidden"
+                    id="admin-product-images-upload"
+                    disabled={uploading}
+                  />
+                  <label
+                    htmlFor="admin-product-images-upload"
+                    className="bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-center py-2.5 rounded-xl cursor-pointer hover:bg-brand-primary/15 transition-all text-[11px] font-bold uppercase tracking-wider block"
+                  >
+                    {uploading ? 'Uploading to Cloudinary...' : 'Upload Image Files'}
+                  </label>
+                  
+                  {formImages.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {formImages.map((imgUrl, idx) => (
+                        <div key={idx} className="relative h-12 w-12 rounded-lg border border-black/10 dark:border-white/10 overflow-hidden bg-gray-50 flex-shrink-0 group">
+                          <img src={imgUrl} className="h-full w-full object-cover" alt="Apparel thumbnail" />
+                          <button
+                            type="button"
+                            onClick={() => setFormImages(formImages.filter((_, i) => i !== idx))}
+                            className="absolute top-0 right-0 bg-brand-primary text-white rounded-bl-lg p-1 opacity-90 hover:opacity-100 transition-opacity"
+                            aria-label="Remove Image"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Price & Discount */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
@@ -324,6 +437,88 @@ export default function AdminProductsPage() {
                   onChange={(e) => setFormStock(e.target.value)}
                   className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
                   required
+                />
+              </div>
+
+              {/* Brand & Subcategory */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 uppercase font-bold">Brand Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mradhul Jaipur"
+                    value={formBrand}
+                    onChange={(e) => setFormBrand(e.target.value)}
+                    className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 uppercase font-bold">Subcategory</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Gota Patti"
+                    value={formSubcategory}
+                    onChange={(e) => setFormSubcategory(e.target.value)}
+                    className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Colors & Fabric */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 uppercase font-bold">Colors (Hex / Names)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. #E01A4F, #D4AF37"
+                    value={formColors}
+                    onChange={(e) => setFormColors(e.target.value)}
+                    className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 uppercase font-bold">Fabric Material</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Pure Georgette"
+                    value={formFabric}
+                    onChange={(e) => setFormFabric(e.target.value)}
+                    className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* SKU Code */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 uppercase font-bold">SKU Code</label>
+                <input
+                  type="text"
+                  placeholder="e.g. MF-SAREE-GP-001"
+                  value={formSku}
+                  onChange={(e) => setFormSku(e.target.value)}
+                  className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
+                />
+              </div>
+
+              {/* Delivery & Return Info */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 uppercase font-bold">Delivery Info</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ships within 24-48 hours."
+                  value={formDelivery}
+                  onChange={(e) => setFormDelivery(e.target.value)}
+                  className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 uppercase font-bold">Return Policy</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 7-day hassle-free returns."
+                  value={formReturn}
+                  onChange={(e) => setFormReturn(e.target.value)}
+                  className="bg-transparent border border-black/10 dark:border-white/10 p-2.5 rounded-xl focus:outline-none"
                 />
               </div>
 

@@ -1,11 +1,11 @@
 {
   "name": "Mradhul Fashion Ecommerce Platform",
   "short_name": "Mradhul Fashion",
-  "description": "Shop luxury Indian ethnic wear, western streetwear, and couture clothing.",
+  "description": "Shop luxury Jaipur ethnic fashion, handcrafted sarees, designer lehengas, festive sets, and premium women's occasion wear.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FAF8F5",
-  "theme_color": "#E01A4F",
+  "theme_color": "#701122",
   "orientation": "portrait-primary",
   "icons": [
     {

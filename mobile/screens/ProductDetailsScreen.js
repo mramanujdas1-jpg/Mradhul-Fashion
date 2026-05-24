@@ -4,64 +4,21 @@ import { useMobile } from '../context';
 
 const { width } = Dimensions.get('window');
 
-const fallbackProducts = [
-  {
-    _id: 'p1',
-    name: 'Royale Jaipur Gota Patti Saree',
-    description: 'A breathtaking royal georgette saree, hand-embellished by Jaipur heritage artisans. Features detailed gota-patti embroidery borders, traditional hand-block floral motifs, and delicate hand-stitched gold sequins. Fits elegantly for festive banquets and weddings.',
-    price: 18999,
-    discountPrice: 14999,
-    category: 'Handcrafted Sarees',
-    images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500'],
-    sizes: ['Free Size'],
-    rating: 4.9,
-    isTrending: true
-  },
-  {
-    _id: 'p2',
-    name: 'Heritage Leheriya Silk Anarkali',
-    description: 'This royal tie-dye Leheriya Anarkali suit set is crafted from pure hand-loomed Banarasi silk. Embellished with fine mirror embroidery and gold zardozi work along the neck and flare. Includes matching churidar and a sheer chiffon dupatta.',
-    price: 14499,
-    discountPrice: 11999,
-    category: 'Royal Anarkalis',
-    images: ['https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=500'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    rating: 4.8,
-    isTrending: true
-  },
-  {
-    _id: 'p3',
-    name: 'Shahi Zardozi Bridal Lehenga',
-    description: 'A masterpiece of royal bridal couture. Tailored in pure mulberry raw silk with heavy zardozi, hand-woven gold dori, and real semi-precious bead embellishments. The flare is detailed with traditional palace arch motifs handcrafted by Jaipur master artisans over 300 hours.',
-    price: 49999,
-    discountPrice: 42999,
-    category: 'Bridal & Festive',
-    images: ['https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=500'],
-    sizes: ['S', 'M', 'L'],
-    rating: 5.0,
-    isTrending: true
-  },
-  {
-    _id: 'p4',
-    name: 'Sanganeri Print Peplum & Palazzo Set',
-    description: 'A contemporary fusion coordinate set featuring Sanganeri handblock printed peplum top with hand-embellished dabka outlines, paired with lightweight floating georgette palazzo pants.',
-    price: 8999,
-    discountPrice: 6999,
-    category: 'Jaipur Fusion Wear',
-    images: ['https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=500'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    rating: 4.5,
-    isFlashSale: true
-  }
-];
-
 export default function ProductDetailsScreen({ route, navigation }) {
   const { productId } = route.params || {};
-  const { API_HOST, addToCart, toggleWishlist, wishlist } = useMobile();
+  const { API_HOST, addToCart, toggleWishlist, wishlist, user } = useMobile();
   const [product, setProduct] = useState(null);
+  const [reviews, setReviews] = useState([]);
   const [selectedSize, setSelectedSize] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+
+  // Review states
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewImages, setReviewImages] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -69,15 +26,20 @@ export default function ProductDetailsScreen({ route, navigation }) {
         const res = await fetch(`${API_HOST}/products/${productId}`);
         if (res.ok) {
           const data = await res.json();
-          setProduct(data);
+          setProduct(data.product);
+          setReviews(data.reviews || []);
+          if (data.product.sizes && data.product.sizes.length) {
+            setSelectedSize(data.product.sizes[0]);
+          }
+          if (data.product.colors && data.product.colors.length) {
+            setSelectedColor(data.product.colors[0]);
+          }
         } else {
-          const mock = fallbackProducts.find((p) => p._id === productId);
-          setProduct(mock || fallbackProducts[0]);
+          setProduct(null);
         }
       } catch (err) {
-        console.warn('Backend server offline. Rendering default mock details.');
-        const mock = fallbackProducts.find((p) => p._id === productId);
-        setProduct(mock || fallbackProducts[0]);
+        setProduct(null);
+        setReviews([]);
       } finally {
         setLoading(false);
       }
@@ -120,6 +82,83 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const handleToggleWishlist = () => {
     toggleWishlist(product);
   };
+
+  const handleHelpfulClick = async (reviewId) => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to vote.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_HOST}/products/reviews/${reviewId}/helpful`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${user.token}`
+        }
+      });
+      if (res.ok) {
+        const refreshRes = await fetch(`${API_HOST}/products/${productId}`);
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          setReviews(refreshData.reviews || []);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to vote:', err);
+    }
+  };
+
+  const handleReviewSubmit = async () => {
+    if (!user) {
+      Alert.alert('Login Required', 'Please login to write a review.');
+      return;
+    }
+    if (!reviewComment.trim()) {
+      Alert.alert('Validation Error', 'Review comments cannot be empty.');
+      return;
+    }
+    setSubmittingReview(true);
+    const imagesArr = reviewImages
+      .split(',')
+      .map(url => url.trim())
+      .filter(url => url.startsWith('http'));
+
+    try {
+      const res = await fetch(`${API_HOST}/products/${productId}/reviews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`
+        },
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment, images: imagesArr })
+      });
+      if (res.ok) {
+        Alert.alert('Success', 'Thank you for your review!');
+        setReviewComment('');
+        setReviewImages('');
+        const refreshRes = await fetch(`${API_HOST}/products/${productId}`);
+        if (refreshRes.ok) {
+          const refreshData = await refreshRes.json();
+          setReviews(refreshData.reviews || []);
+          if (refreshData.product) {
+            setProduct(refreshData.product);
+          }
+        }
+      } else {
+        const data = await res.json();
+        Alert.alert('Error', data.message || 'Failed to submit review.');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Unable to connect to the backend server.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  // Distribution calculations
+  const starBreakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  reviews.forEach((r) => {
+    if (starBreakdown[r.rating] !== undefined) starBreakdown[r.rating]++;
+  });
 
   return (
     <View style={styles.container}>
@@ -182,12 +221,38 @@ export default function ProductDetailsScreen({ route, navigation }) {
           <View style={styles.ratingBadge}>
             <Text style={styles.starIcon}>★</Text>
             <Text style={styles.ratingText}>
-              {product.rating || 4.5} ({product.numReviews || 12} reviews)
+              {product.rating ? product.rating.toFixed(1) : '0.0'} ({product.numReviews || 0} reviews)
             </Text>
           </View>
         </View>
 
         <View style={styles.divider} />
+
+        {/* Color Selection */}
+        {product.colors && product.colors.length > 0 && (
+          <View style={styles.colorSection}>
+            <Text style={styles.sectionTitle}>Select Color</Text>
+            <View style={styles.colorsList}>
+              {product.colors.map((color) => {
+                const isSelected = selectedColor === color;
+                return (
+                  <TouchableOpacity
+                    key={color}
+                    style={[
+                      styles.colorCircle,
+                      { backgroundColor: color },
+                      isSelected && styles.colorCircleSelected
+                    ]}
+                    onPress={() => setSelectedColor(color)}
+                    title={color}
+                  />
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {product.colors && product.colors.length > 0 && <View style={styles.divider} />}
 
         {/* Size Selection */}
         <View style={styles.sizeSection}>
@@ -218,6 +283,50 @@ export default function ProductDetailsScreen({ route, navigation }) {
           <Text style={styles.sectionTitle}>Craftsmanship & Fabric Detailing</Text>
           <Text style={styles.descriptionContent}>{product.description}</Text>
           
+          <View style={styles.fabricDetailsBlock}>
+            <View style={styles.fabricCol}>
+              <Text style={styles.fabricLabel}>Fabric / Material</Text>
+              <Text style={styles.fabricVal}>{product.fabricMaterial || 'Premium Silk & Cotton'}</Text>
+            </View>
+            <View style={styles.fabricCol}>
+              <Text style={styles.fabricLabel}>SKU Code</Text>
+              <Text style={styles.fabricVal}>{product.sku || 'N/A'}</Text>
+            </View>
+          </View>
+        </View>
+
+        {product.specifications && product.specifications.length > 0 && (
+          <View style={styles.divider} />
+        )}
+
+        {/* Specifications list */}
+        {product.specifications && product.specifications.length > 0 && (
+          <View style={styles.specsSection}>
+            <Text style={styles.sectionTitle}>Specifications</Text>
+            <View style={styles.specsBox}>
+              {product.specifications.map((spec, idx) => (
+                <View key={idx} style={styles.specRow}>
+                  <Text style={styles.specKey}>{spec.key}</Text>
+                  <Text style={styles.specValue}>{spec.value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={styles.divider} />
+
+        {/* Shipping & policies */}
+        <View style={styles.policySection}>
+          <Text style={styles.sectionTitle}>Shipping & Returns</Text>
+          <View style={styles.policyBox}>
+            <Text style={styles.policyText}>🚚 {product.deliveryInfo || 'Ships in 24-48 hours. Free express delivery.'}</Text>
+            <Text style={styles.policyText}>🔄 {product.returnPolicy || '7-day standard returns. alter services available.'}</Text>
+          </View>
+        </View>
+
+        {/* Heritage Callout */}
+        <View style={styles.heritageCalloutBox}>
           <View style={styles.heritageCallout}>
             <Text style={styles.heritageCalloutTitle}>👑 Jaipur Heritage Guarantee</Text>
             <Text style={styles.heritageCalloutText}>
@@ -239,6 +348,131 @@ export default function ProductDetailsScreen({ route, navigation }) {
           <View style={styles.trustItem}>
             <Text style={styles.trustIcon}>💎</Text>
             <Text style={styles.trustText}>100% Authentic</Text>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Customer Reviews Section */}
+        <View style={styles.reviewsSection}>
+          <Text style={styles.sectionTitle}>Customer Reviews</Text>
+          
+          {/* Stars breakdown */}
+          {reviews.length > 0 && (
+            <View style={styles.ratingSummaryBox}>
+              <View style={styles.ratingSummaryLeft}>
+                <Text style={styles.avgRatingText}>{product.rating ? product.rating.toFixed(1) : '0.0'}</Text>
+                <View style={styles.avgStarsRow}>
+                  {[...Array(5)].map((_, i) => (
+                    <Text key={i} style={[styles.starReviewIcon, i < Math.round(product.rating || 0) ? styles.starFilled : styles.starUnfilled]}>★</Text>
+                  ))}
+                </View>
+                <Text style={styles.ratingsCountText}>{reviews.length} Ratings</Text>
+              </View>
+              <View style={styles.ratingSummaryRight}>
+                {[5, 4, 3, 2, 1].map((stars) => {
+                  const count = starBreakdown[stars] || 0;
+                  const percent = Math.round((count / (reviews.length || 1)) * 100);
+                  return (
+                    <View key={stars} style={styles.progressRow}>
+                      <Text style={styles.starLabelText}>{stars} ★</Text>
+                      <View style={styles.progressBarBg}>
+                        <View style={[styles.progressBarFilled, { width: `${percent}%` }]} />
+                      </View>
+                      <Text style={styles.percentText}>{percent}%</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Review write form */}
+          {user && (
+            <View style={styles.writeReviewBox}>
+              <Text style={styles.writeReviewTitle}>Share Your Review</Text>
+              <Text style={styles.reviewLabel}>Rating (1-5)</Text>
+              <View style={styles.ratingInputRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                    <Text style={[styles.starInputIcon, star <= reviewRating ? styles.starInputFilled : styles.starInputUnfilled]}>★</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.reviewLabel}>Comment</Text>
+              <TextInput
+                style={styles.reviewInput}
+                placeholder="Review fabric quality, sizing fit..."
+                placeholderTextColor="#8E8E93"
+                value={reviewComment}
+                onChangeText={setReviewComment}
+                multiline
+              />
+
+              <Text style={styles.reviewLabel}>Image URLs (Comma separated)</Text>
+              <TextInput
+                style={styles.reviewInput}
+                placeholder="e.g. https://image.jpg"
+                placeholderTextColor="#8E8E93"
+                value={reviewImages}
+                onChangeText={setReviewImages}
+              />
+
+              <TouchableOpacity style={styles.submitReviewBtn} onPress={handleReviewSubmit} disabled={submittingReview}>
+                {submittingReview ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.submitReviewText}>POST REVIEW</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* List of Reviews */}
+          <View style={styles.reviewsListBlock}>
+            {reviews.length === 0 ? (
+              <Text style={styles.noReviewsText}>No reviews yet. Be the first to write one!</Text>
+            ) : (
+              reviews.map((rev) => {
+                const hasUpvoted = rev.helpfulUsers && user && rev.helpfulUsers.includes(user._id);
+                return (
+                  <View key={rev._id} style={styles.reviewCard}>
+                    <View style={styles.reviewCardHeader}>
+                      <Text style={styles.reviewUserName}>{rev.name}</Text>
+                      <Text style={styles.reviewDate}>{new Date(rev.createdAt).toLocaleDateString()}</Text>
+                    </View>
+                    <View style={styles.reviewHeaderRow}>
+                      <View style={styles.reviewStarsRow}>
+                        {[...Array(5)].map((_, i) => (
+                          <Text key={i} style={[styles.starMiniIcon, i < rev.rating ? styles.starFilled : styles.starUnfilled]}>★</Text>
+                        ))}
+                      </View>
+                      {rev.verifiedPurchase && (
+                        <Text style={styles.verifiedBadge}>✓ VERIFIED</Text>
+                      )}
+                    </View>
+                    <Text style={styles.reviewComment}>{rev.comment}</Text>
+                    
+                    {/* Review images */}
+                    {rev.images && rev.images.length > 0 && (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewImagesScroll}>
+                        {rev.images.map((imgUrl, imgIdx) => (
+                          <Image key={imgIdx} source={{ uri: imgUrl }} style={styles.reviewThumbnail} />
+                        ))}
+                      </ScrollView>
+                    )}
+
+                    {/* Helpful upvote button */}
+                    <TouchableOpacity style={[styles.helpfulBtn, hasUpvoted && styles.helpfulBtnActive]} onPress={() => handleHelpfulClick(rev._id)}>
+                      <Text style={[styles.helpfulBtnText, hasUpvoted && styles.helpfulBtnTextActive]}>
+                        👍 Helpful ({rev.helpfulCount || 0})
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
           </View>
         </View>
       </ScrollView>
@@ -264,7 +498,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAF7F2'
   },
   scrollContainer: {
-    paddingBottom: 100
+    paddingBottom: 120
   },
   loaderContainer: {
     flex: 1,
@@ -404,6 +638,26 @@ const styles = StyleSheet.create({
     marginVertical: 18,
     marginHorizontal: 20
   },
+  colorSection: {
+    paddingHorizontal: 20
+  },
+  colorsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 10
+  },
+  colorCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)'
+  },
+  colorCircleSelected: {
+    borderWidth: 3,
+    borderColor: '#701122'
+  },
   sizeSection: {
     paddingHorizontal: 20
   },
@@ -414,7 +668,7 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#2B1D20',
     textTransform: 'uppercase',
@@ -472,11 +726,72 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '300'
   },
+  fabricDetailsBlock: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F5EFE6',
+    paddingTop: 12
+  },
+  fabricCol: {
+    flex: 1
+  },
+  fabricLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#8E8E93',
+    textTransform: 'uppercase'
+  },
+  fabricVal: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2B1D20',
+    marginTop: 2
+  },
+  specsSection: {
+    paddingHorizontal: 20
+  },
+  specsBox: {
+    marginTop: 10
+  },
+  specRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5EFE6'
+  },
+  specKey: {
+    fontSize: 12,
+    color: '#6C757D',
+    fontWeight: '300'
+  },
+  specValue: {
+    fontSize: 12,
+    color: '#2B1D20',
+    fontWeight: '600'
+  },
+  policySection: {
+    paddingHorizontal: 20
+  },
+  policyBox: {
+    marginTop: 10
+  },
+  policyText: {
+    fontSize: 12,
+    color: '#554448',
+    marginVertical: 4,
+    lineHeight: 18
+  },
+  heritageCalloutBox: {
+    paddingHorizontal: 20,
+    marginTop: 16
+  },
   heritageCallout: {
     backgroundColor: 'rgba(197, 160, 89, 0.08)',
     borderRadius: 16,
     padding: 16,
-    marginTop: 18,
     borderWidth: 0.5,
     borderColor: '#C5A059'
   },
@@ -517,6 +832,241 @@ const styles = StyleSheet.create({
     color: '#C5A059',
     textTransform: 'uppercase',
     letterSpacing: 0.5
+  },
+  reviewsSection: {
+    paddingHorizontal: 20
+  },
+  ratingSummaryBox: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 0.5,
+    borderColor: '#F5EFE6',
+    marginTop: 12
+  },
+  ratingSummaryLeft: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#F5EFE6'
+  },
+  avgRatingText: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    fontFamily: 'System',
+    color: '#701122'
+  },
+  avgStarsRow: {
+    flexDirection: 'row',
+    marginVertical: 4
+  },
+  starReviewIcon: {
+    fontSize: 12,
+    marginHorizontal: 1
+  },
+  starFilled: {
+    color: '#C5A059'
+  },
+  starUnfilled: {
+    color: '#EBEBEB'
+  },
+  ratingsCountText: {
+    fontSize: 9,
+    color: '#8E8E93',
+    fontWeight: '600',
+    textTransform: 'uppercase'
+  },
+  ratingSummaryRight: {
+    flex: 2,
+    paddingLeft: 16,
+    justifyContent: 'center'
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2
+  },
+  starLabelText: {
+    fontSize: 10,
+    color: '#6C757D',
+    width: 24,
+    textAlign: 'right'
+  },
+  progressBarBg: {
+    flex: 1,
+    height: 4,
+    backgroundColor: '#F5EFE6',
+    borderRadius: 2,
+    marginHorizontal: 8,
+    overflow: 'hidden'
+  },
+  progressBarFilled: {
+    height: '100%',
+    backgroundColor: '#C5A059'
+  },
+  percentText: {
+    fontSize: 9,
+    color: '#8E8E93',
+    width: 28,
+    textAlign: 'left'
+  },
+  writeReviewBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 0.5,
+    borderColor: '#F5EFE6',
+    marginTop: 16
+  },
+  writeReviewTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#701122',
+    marginBottom: 10
+  },
+  reviewLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#6C757D',
+    textTransform: 'uppercase',
+    marginTop: 8,
+    marginBottom: 4
+  },
+  ratingInputRow: {
+    flexDirection: 'row',
+    marginVertical: 4
+  },
+  starInputIcon: {
+    fontSize: 24,
+    marginRight: 6
+  },
+  starInputFilled: {
+    color: '#C5A059'
+  },
+  starInputUnfilled: {
+    color: '#EBEBEB'
+  },
+  reviewInput: {
+    borderWidth: 1,
+    borderColor: '#F5EFE6',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#2B1D20',
+    backgroundColor: '#FAF7F2',
+    textAlignVertical: 'top',
+    minHeight: 40
+  },
+  submitReviewBtn: {
+    backgroundColor: '#701122',
+    height: 38,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12
+  },
+  submitReviewText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 0.5
+  },
+  reviewsListBlock: {
+    marginTop: 20
+  },
+  noReviewsText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginVertical: 20
+  },
+  reviewCard: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5EFE6',
+    paddingVertical: 14
+  },
+  reviewCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  reviewUserName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2B1D20'
+  },
+  reviewDate: {
+    fontSize: 10,
+    color: '#8E8E93',
+    fontWeight: '300'
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4
+  },
+  reviewStarsRow: {
+    flexDirection: 'row'
+  },
+  starMiniIcon: {
+    fontSize: 10,
+    marginRight: 1
+  },
+  verifiedBadge: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8
+  },
+  reviewComment: {
+    fontSize: 12,
+    color: '#554448',
+    lineHeight: 18,
+    marginTop: 6,
+    fontWeight: '300'
+  },
+  reviewImagesScroll: {
+    flexDirection: 'row',
+    marginTop: 8
+  },
+  reviewThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    marginRight: 8,
+    resizeMode: 'cover',
+    borderWidth: 0.5,
+    borderColor: '#EBEBEB'
+  },
+  helpfulBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#F5EFE6',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#FFFFFF'
+  },
+  helpfulBtnActive: {
+    borderColor: '#701122',
+    backgroundColor: 'rgba(112, 17, 34, 0.05)'
+  },
+  helpfulBtnText: {
+    fontSize: 9,
+    color: '#8E8E93',
+    fontWeight: '700'
+  },
+  helpfulBtnTextActive: {
+    color: '#701122'
   },
   bottomBar: {
     position: 'absolute',

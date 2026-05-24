@@ -13,12 +13,12 @@ export default function CartScreen({ navigation }) {
   // Checkout modal states
   const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('COD');
-  const [name, setName] = useState(user?.name || 'Devi Sharma');
-  const [phone, setPhone] = useState('9998887776');
-  const [address, setAddress] = useState('Flat 402, Royal Residency, C-Scheme');
-  const [city, setCity] = useState('Jaipur');
-  const [state, setState] = useState('Rajasthan');
-  const [pincode, setPincode] = useState('302001');
+  const [name, setName] = useState(user?.name || '');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [pincode, setPincode] = useState('');
   const [processing, setProcessing] = useState(false);
 
   // Math
@@ -28,22 +28,33 @@ export default function CartScreen({ navigation }) {
   const shippingPrice = itemsPrice - discountAmount > 1499 || itemsPrice === 0 ? 0 : 99; // Free over 1499
   const totalPrice = itemsPrice - discountAmount + taxPrice + shippingPrice;
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
     const code = couponCode.trim().toUpperCase();
-    if (code === 'WELCOMELUXE') {
-      setDiscountPercent(15);
-      setAppliedCoupon('WELCOMELUXE (15% OFF)');
-      Alert.alert('Coupon Applied', '15% welcome discount has been applied to your bag!');
-    } else if (code === 'JAIPUR20') {
-      setDiscountPercent(20);
-      setAppliedCoupon('JAIPUR20 (20% OFF)');
-      Alert.alert('Coupon Applied', '20% heritage discount has been applied to your bag!');
-    } else if (code === 'ROYAL10') {
-      setDiscountPercent(10);
-      setAppliedCoupon('ROYAL10 (10% OFF)');
-      Alert.alert('Coupon Applied', '10% royal discount has been applied to your bag!');
-    } else {
-      Alert.alert('Invalid Coupon', 'The coupon code is invalid or has expired.');
+    if (!code) return;
+    if (!user?.token) {
+      Alert.alert('Login Required', 'Please sign in before applying coupons.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_HOST}/coupons/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`
+        },
+        body: JSON.stringify({ code })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        Alert.alert('Coupon Unavailable', data.message || 'This coupon is invalid or expired.');
+        return;
+      }
+      setDiscountPercent(data.discountPercentage);
+      setAppliedCoupon(`${data.code} (${data.discountPercentage}% OFF)`);
+      Alert.alert('Coupon Applied', 'Your coupon has been applied securely.');
+    } catch (error) {
+      Alert.alert('Coupon Unavailable', 'Unable to validate coupons right now. Please try again.');
     }
     setCouponCode('');
   };
@@ -82,22 +93,25 @@ export default function CartScreen({ navigation }) {
       };
 
       const token = user?.token;
-      if (token) {
-        try {
-          await fetch(`${API_HOST}/orders`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify(orderData)
-          });
-        } catch (e) {
-          console.warn('API error during checkout. Saving in mock session fallback.');
-        }
+      if (!token) {
+        Alert.alert('Login Required', 'Please sign in before placing an order.');
+        setProcessing(false);
+        return;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const response = await fetch(`${API_HOST}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(orderData)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Unable to place order.');
+      }
 
       Alert.alert(
         'Order Placed 🎉',
@@ -115,7 +129,7 @@ export default function CartScreen({ navigation }) {
         ]
       );
     } catch (err) {
-      Alert.alert('Checkout Failed', 'Something went wrong. Please try again.');
+      Alert.alert('Checkout Failed', err.message || 'Something went wrong. Please try again.');
     } finally {
       setProcessing(false);
     }
@@ -201,7 +215,7 @@ export default function CartScreen({ navigation }) {
             <View style={styles.couponInputRow}>
               <TextInput
                 style={styles.couponInput}
-                placeholder="Enter WELCOMELUXE, JAIPUR20 or ROYAL10"
+                placeholder="Enter coupon code"
                 placeholderTextColor="#8E8E93"
                 value={couponCode}
                 onChangeText={setCouponCode}

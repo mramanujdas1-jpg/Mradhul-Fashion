@@ -1,6 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { API_BASE } from './config';
+import { onAuthStateChange, logOut } from './firebase';
 
 const AppContext = createContext();
 
@@ -11,15 +13,14 @@ export function AppProvider({ children }) {
   const [theme, setTheme] = useState('light');
   const [loading, setLoading] = useState(true);
 
-  // Hydrate state from localStorage on mount
+  // Set up Firebase auth observer & local storage hydration
   useEffect(() => {
+    // 1. Initial local storage hydration for fast offline load
     try {
-      const storedUser = localStorage.getItem('mf_user');
       const storedCart = localStorage.getItem('mf_cart');
       const storedWishlist = localStorage.getItem('mf_wishlist');
       const storedTheme = localStorage.getItem('mf_theme');
 
-      if (storedUser) setUser(JSON.parse(storedUser));
       if (storedCart) setCart(JSON.parse(storedCart));
       if (storedWishlist) setWishlist(JSON.parse(storedWishlist));
       if (storedTheme) {
@@ -27,20 +28,70 @@ export function AppProvider({ children }) {
         document.body.classList.toggle('dark', storedTheme === 'dark');
       }
     } catch (e) {
-      console.error('Failed to parse stored local state', e);
-    } finally {
-      setLoading(false);
+      console.error('Failed to parse local storage hydration:', e);
     }
 
-    // Register PWA Service Worker
+    // 2. Firebase Authentication Observer
+    const unsubscribe = onAuthStateChange(async (firebaseUser) => {
+      setLoading(true);
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          localStorage.setItem('mf_auth_token', token);
+
+          // Retrieve any offline guest cart/wishlist to merge
+          const guestCart = JSON.parse(localStorage.getItem('mf_cart') || '[]');
+          const guestWishlist = JSON.parse(localStorage.getItem('mf_wishlist') || '[]');
+
+          // Sync profiles and merge items on Express API
+          const response = await fetch(`${API_BASE}/auth/sync`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              cart: guestCart,
+              wishlist: guestWishlist
+            })
+          });
+
+          if (response.ok) {
+            const syncedUser = await response.json();
+            setUser(syncedUser);
+            localStorage.setItem('mf_user', JSON.stringify(syncedUser));
+
+            // Sync context state with merged database data
+            setCart(syncedUser.cart || []);
+            setWishlist(syncedUser.wishlist || []);
+            localStorage.setItem('mf_cart', JSON.stringify(syncedUser.cart || []));
+            localStorage.setItem('mf_wishlist', JSON.stringify(syncedUser.wishlist || []));
+          } else {
+            console.error('Express user sync failed');
+          }
+        } catch (err) {
+          console.error('Error syncing auth state with API:', err);
+        }
+      } else {
+        // Clear authenticated session details on sign out
+        setUser(null);
+        localStorage.removeItem('mf_user');
+        localStorage.removeItem('mf_auth_token');
+      }
+      setLoading(false);
+    });
+
+    // PWA Service Worker Registration
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
-        .then((reg) => console.log('ServiceWorker registered with scope:', reg.scope))
-        .catch((err) => console.warn('ServiceWorker registration failed:', err));
+        .then((reg) => console.log('ServiceWorker active on scope:', reg.scope))
+        .catch((err) => console.warn('ServiceWorker registration error:', err));
     }
+
+    return () => unsubscribe();
   }, []);
 
-  // Update theme helper
+  // Update theme settings
   const toggleTheme = () => {
     const nextTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(nextTheme);
@@ -48,22 +99,53 @@ export function AppProvider({ children }) {
     document.body.classList.toggle('dark', nextTheme === 'dark');
   };
 
-  // Auth helper
-  const login = (userData) => {
-    setUser(userData);
-    localStorage.setItem('mf_user', JSON.stringify(userData));
+  // Logout Trigger
+  const logout = async () => {
+    try {
+      await logOut();
+      setUser(null);
+      setCart([]);
+      setWishlist([]);
+      localStorage.removeItem('mf_user');
+      localStorage.removeItem('mf_auth_token');
+      localStorage.removeItem('mf_cart');
+      localStorage.removeItem('mf_wishlist');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('mf_user');
-    setCart([]);
-    setWishlist([]);
-    localStorage.removeItem('mf_cart');
-    localStorage.removeItem('mf_wishlist');
+  // helper to sync cart state to API database if user is logged in
+  const syncCartToDatabase = (updatedCart) => {
+    const token = localStorage.getItem('mf_auth_token');
+    if (!token) return;
+    
+    fetch(`${API_BASE}/auth/cart`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ cart: updatedCart })
+    }).catch(err => console.error('Failed to sync cart updates with database:', err));
   };
 
-  // Cart actions
+  // helper to sync wishlist state to API database if user is logged in
+  const syncWishlistToDatabase = (updatedWishlist) => {
+    const token = localStorage.getItem('mf_auth_token');
+    if (!token) return;
+
+    fetch(`${API_BASE}/auth/wishlist`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ wishlist: updatedWishlist })
+    }).catch(err => console.error('Failed to sync wishlist updates with database:', err));
+  };
+
+  // Add Item to Cart
   const addToCart = (product, size = 'M', qty = 1) => {
     setCart((prevCart) => {
       const existingItemIndex = prevCart.findIndex(
@@ -88,20 +170,24 @@ export function AppProvider({ children }) {
         ];
       }
       localStorage.setItem('mf_cart', JSON.stringify(newCart));
+      syncCartToDatabase(newCart);
       return newCart;
     });
   };
 
+  // Remove Item from Cart
   const removeFromCart = (productId, size) => {
     setCart((prevCart) => {
       const newCart = prevCart.filter(
         (item) => !(item.product === productId && item.size === size)
       );
       localStorage.setItem('mf_cart', JSON.stringify(newCart));
+      syncCartToDatabase(newCart);
       return newCart;
     });
   };
 
+  // Update Cart Quantity
   const updateCartQty = (productId, size, qty) => {
     if (qty <= 0) {
       removeFromCart(productId, size);
@@ -112,16 +198,19 @@ export function AppProvider({ children }) {
         item.product === productId && item.size === size ? { ...item, qty } : item
       );
       localStorage.setItem('mf_cart', JSON.stringify(newCart));
+      syncCartToDatabase(newCart);
       return newCart;
     });
   };
 
+  // Clear Cart
   const clearCart = () => {
     setCart([]);
     localStorage.removeItem('mf_cart');
+    syncCartToDatabase([]);
   };
 
-  // Wishlist actions
+  // Add/Remove Wishlist
   const toggleWishlist = (product) => {
     setWishlist((prevWishlist) => {
       const exists = prevWishlist.some((item) => item._id === product._id);
@@ -132,6 +221,7 @@ export function AppProvider({ children }) {
         newWishlist = [...prevWishlist, product];
       }
       localStorage.setItem('mf_wishlist', JSON.stringify(newWishlist));
+      syncWishlistToDatabase(newWishlist);
       return newWishlist;
     });
   };
@@ -144,7 +234,6 @@ export function AppProvider({ children }) {
         wishlist,
         theme,
         loading,
-        login,
         logout,
         toggleTheme,
         addToCart,

@@ -2,8 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useApp } from '../app/context';
 import { Heart, ShoppingCart, Star } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function ProductCard({ product }) {
   const { wishlist, toggleWishlist, addToCart } = useApp();
@@ -33,13 +35,21 @@ export default function ProductCard({ product }) {
   };
 
   return (
-    <div className="group relative bg-white dark:bg-brand-charcoal rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-brand-primary/5 flex flex-col h-full">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="group relative bg-white dark:bg-brand-charcoal rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-brand-primary/5 flex flex-col h-full"
+    >
       {/* Product Image section */}
       <Link href={`/products/${product._id}`} className="relative block overflow-hidden aspect-[3/4] bg-gray-100">
-        <img
+        <Image
           src={product.images[0]}
           alt={product.name}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          className="object-cover object-center group-hover:scale-105 transition-transform duration-500"
         />
 
         {/* Badges */}
@@ -118,6 +128,6 @@ export default function ProductCard({ product }) {
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

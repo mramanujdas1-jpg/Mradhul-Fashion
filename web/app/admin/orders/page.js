@@ -31,33 +31,15 @@ export default function AdminOrdersPage() {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/orders`, {
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (res.ok) {
         const data = await res.json();
         setOrders(data);
       }
     } catch (err) {
-      console.warn('API connection failed. Running offline admin orders mock data.');
-      setOrders([
-        {
-          _id: 'ord_mock_1',
-          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          paymentMethod: 'COD',
-          totalPrice: 2999,
-          status: 'Shipped',
-          user: { name: 'Sample Customer', email: 'customer@mradhulfashion.com' },
-          shippingAddress: { name: 'John Doe', phone: '9876543210', streetAddress: 'Flat 402, Highrise Apartments, Park Street', city: 'Bangalore', state: 'Karnataka', postalCode: '560001' },
-          orderItems: [
-            { name: 'Royale Banarasi Silk Saree', qty: 1, image: '/banner_ethnic.png', price: 2999, size: 'Free Size' }
-          ],
-          trackingSteps: [
-            { status: 'Pending', description: 'Your order has been received.', timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-            { status: 'Processing', description: 'Package is being packed at warehouse.', timestamp: new Date(Date.now() - 1.5 * 24 * 60 * 60 * 1000).toISOString() },
-            { status: 'Shipped', description: 'Dispatched via premium courier partner. Tracking ID: IN9876543.', timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString() }
-          ]
-        }
-      ]);
+      setErrorMsg('Unable to load live orders. Check API availability and admin authentication.');
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -75,7 +57,7 @@ export default function AdminOrdersPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify({
           status: targetStatus,
@@ -91,15 +73,7 @@ export default function AdminOrdersPage() {
         setErrorMsg(data.message || 'Failed to update order status.');
       }
     } catch (err) {
-      console.warn('Running offline mock order status update.');
-      setOrders(prev => prev.map(o => {
-        if (o._id === orderId) {
-          const updatedSteps = [...o.trackingSteps, { status: targetStatus, description: statusDesc || `Status updated to ${targetStatus}`, timestamp: new Date().toISOString() }];
-          return { ...o, status: targetStatus, trackingSteps: updatedSteps };
-        }
-        return o;
-      }));
-      setStatusDesc('');
+      setErrorMsg('Unable to update this order right now.');
     } finally {
       setActionLoading(false);
     }

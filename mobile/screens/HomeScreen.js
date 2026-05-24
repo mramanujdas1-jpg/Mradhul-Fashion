@@ -1,50 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, FlatList, ActivityIndicator, Dimensions } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, Image, TouchableOpacity, FlatList, ActivityIndicator, Dimensions, RefreshControl } from 'react-native';
 import { useMobile } from '../context';
 
 const { width } = Dimensions.get('window');
 
-const fallbackCategories = [
-  { _id: 'cat1', name: 'Handcrafted Sarees', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400' },
-  { _id: 'cat2', name: 'Designer Lehengas', image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=400' },
-  { _id: 'cat3', name: 'Royal Anarkalis', image: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=400' },
-  { _id: 'cat4', name: 'Jaipur Fusion Wear', image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=400' },
-  { _id: 'cat5', name: 'Bridal & Festive', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=400' },
-  { _id: 'cat6', name: 'Artisan Jackets & Dupattas', image: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400' }
-];
-
-const fallbackProducts = [
-  { _id: 'p1', name: 'Royale Jaipur Gota Patti Saree', price: 18999, discountPrice: 14999, category: 'Handcrafted Sarees', images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500'], sizes: ['Free Size'], rating: 4.9, isTrending: true },
-  { _id: 'p2', name: 'Heritage Leheriya Silk Anarkali', price: 14499, discountPrice: 11999, category: 'Royal Anarkalis', images: ['https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=500'], sizes: ['S', 'M', 'L', 'XL'], rating: 4.8, isTrending: true },
-  { _id: 'p3', name: 'Shahi Zardozi Bridal Lehenga', price: 49999, discountPrice: 42999, category: 'Bridal & Festive', images: ['https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=500'], sizes: ['S', 'M', 'L'], rating: 5.0, isTrending: true },
-  { _id: 'p4', name: 'Sanganeri Print Palazzo Set', price: 8999, discountPrice: 6999, category: 'Jaipur Fusion Wear', images: ['https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=500'], sizes: ['S', 'M', 'L', 'XL'], rating: 4.5, isFlashSale: true }
-];
-
 export default function HomeScreen({ navigation }) {
   const { API_HOST } = useMobile();
-  const [categories, setCategories] = useState(fallbackCategories);
-  const [products, setProducts] = useState(fallbackProducts);
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [networkError, setNetworkError] = useState('');
+
+  const fetchData = async () => {
+    try {
+      setNetworkError('');
+      const catRes = await fetch(`${API_HOST}/categories`);
+      if (catRes.ok) {
+        const catData = await catRes.json();
+        if (catData.length) setCategories(catData);
+      }
+      const prodRes = await fetch(`${API_HOST}/products`);
+      if (prodRes.ok) {
+        const prodData = await prodRes.json();
+        if (prodData.products && prodData.products.length) setProducts(prodData.products);
+      }
+    } catch (e) {
+      setNetworkError('Collections are temporarily unavailable. Pull to refresh shortly.');
+      setCategories([]);
+      setProducts([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const catRes = await fetch(`${API_HOST}/categories`);
-        if (catRes.ok) {
-          const catData = await catRes.json();
-          if (catData.length) setCategories(catData);
-        }
-        const prodRes = await fetch(`${API_HOST}/products`);
-        if (prodRes.ok) {
-          const prodData = await prodRes.json();
-          if (prodData.products && prodData.products.length) setProducts(prodData.products);
-        }
-      } catch (e) {
-        console.warn('Backend server offline. Rendering default mock collections on mobile.');
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchData();
+  }, []);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
     fetchData();
   }, []);
 
@@ -78,7 +74,13 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView 
+      style={styles.container} 
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#701122']} />
+      }
+    >
       {/* Announcement bar */}
       <View style={styles.announcementBar}>
         <Text style={styles.announcementText}>🌸 MADE IN JAIPUR • HANDCRAFTED WITH LOVE 🌸</Text>
@@ -94,8 +96,13 @@ export default function HomeScreen({ navigation }) {
       {/* 2. Categories Horizontal Scroll */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Shop Collections</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
-          {categories.map((cat) => (
+        {networkError && categories.length === 0 ? (
+          <View style={styles.emptyStateCard}>
+            <Text style={styles.emptyStateText}>{networkError}</Text>
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+            {categories.map((cat) => (
             <TouchableOpacity
               key={cat._id || cat.name}
               style={styles.categoryBubble}
@@ -104,8 +111,9 @@ export default function HomeScreen({ navigation }) {
               <Image source={{ uri: cat.image.startsWith('http') ? cat.image : 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400' }} style={styles.categoryImage} />
               <Text style={styles.categoryName} numberOfLines={1}>{cat.name}</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       {/* 3. Promotional banner */}
@@ -155,7 +163,19 @@ export default function HomeScreen({ navigation }) {
       <View style={[styles.section, { marginBottom: 40 }]}>
         <Text style={styles.sectionTitle}>Trending Couture</Text>
         {loading ? (
-          <ActivityIndicator color="#701122" size="large" style={{ marginVertical: 30 }} />
+          <View style={styles.skeletonGrid}>
+             {[1, 2, 3, 4].map(k => (
+               <View key={k} style={[styles.card, styles.skeletonCard]}>
+                 <View style={styles.skeletonImage} />
+                 <View style={styles.skeletonText1} />
+                 <View style={styles.skeletonText2} />
+               </View>
+             ))}
+          </View>
+        ) : trendingItems.length === 0 ? (
+          <View style={styles.emptyStateCard}>
+            <Text style={styles.emptyStateText}>{networkError || 'No trending products are available yet.'}</Text>
+          </View>
         ) : (
           <FlatList
             data={trendingItems}
@@ -425,5 +445,51 @@ const styles = StyleSheet.create({
   gridRow: {
     justifyContent: 'space-between',
     paddingHorizontal: 15
+  },
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15
+  },
+  skeletonCard: {
+    backgroundColor: '#EBEBEB',
+    borderColor: 'transparent',
+    paddingBottom: 15
+  },
+  skeletonImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#DCDCDC'
+  },
+  skeletonText1: {
+    width: '60%',
+    height: 10,
+    backgroundColor: '#DCDCDC',
+    marginTop: 15,
+    marginLeft: 12,
+    borderRadius: 4
+  },
+  skeletonText2: {
+    width: '80%',
+    height: 12,
+    backgroundColor: '#DCDCDC',
+    marginTop: 8,
+    marginLeft: 12,
+    borderRadius: 4
+  },
+  emptyStateCard: {
+    marginHorizontal: 16,
+    padding: 18,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F0E6D7'
+  },
+  emptyStateText: {
+    color: '#6C757D',
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center'
   }
 });

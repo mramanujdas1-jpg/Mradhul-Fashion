@@ -50,7 +50,7 @@ export default function CartPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify({ code: couponCode })
       });
@@ -64,22 +64,7 @@ export default function CartPage() {
         setCouponError(data.message || 'Invalid coupon code.');
       }
     } catch (err) {
-      console.warn('API error validating coupon. Running offline coupon validation.');
-      // Offline fallback coupons
-      const codeUpper = couponCode.toUpperCase();
-      if (codeUpper === 'MRADHUL10') {
-        setDiscountPercent(10);
-        setCouponAppliedCode('MRADHUL10');
-      } else if (codeUpper === 'FESTIVE20') {
-        setDiscountPercent(20);
-        setCouponAppliedCode('FESTIVE20');
-      } else if (codeUpper === 'WELCOME50') {
-        setDiscountPercent(50);
-        setCouponAppliedCode('WELCOME50');
-      } else {
-        setCouponError('Invalid or expired coupon code offline.');
-      }
-      setCouponCode('');
+      setCouponError('Unable to validate this coupon right now. Please try again in a moment.');
     } finally {
       setCouponLoading(false);
     }
@@ -195,7 +180,7 @@ export default function CartPage() {
             <form onSubmit={handleApplyCoupon} className="flex gap-2">
               <input
                 type="text"
-                placeholder="Code (e.g. MRADHUL10)"
+                placeholder="Enter coupon code"
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value)}
                 className="bg-transparent border border-black/10 dark:border-white/10 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-brand-primary flex-grow uppercase font-semibold"
@@ -220,16 +205,10 @@ export default function CartPage() {
               </p>
             )}
 
-            {/* Offline suggestion labels */}
             {!couponAppliedCode && (
-              <div className="text-[10px] text-gray-500 leading-normal border-t border-black/5 dark:border-white/5 pt-3">
-                <span className="font-bold">Available Coupons:</span>
-                <ul className="list-disc pl-4 mt-1 flex flex-col gap-0.5 font-light">
-                  <li><strong>MRADHUL10</strong>: 10% discount on cart</li>
-                  <li><strong>FESTIVE20</strong>: 20% discount on cart</li>
-                  <li><strong>WELCOME50</strong>: 50% discount on first purchase</li>
-                </ul>
-              </div>
+              <p className="border-t border-black/5 pt-3 text-[10px] leading-normal text-gray-500">
+                Promotional codes are validated securely before checkout.
+              </p>
             )}
           </div>
 

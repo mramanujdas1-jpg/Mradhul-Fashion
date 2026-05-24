@@ -5,25 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../context';
 import Link from 'next/link';
 import { 
-  ShieldCheck, Users, PackageOpen, ClipboardList, Wallet, RefreshCcw, 
-  UserPlus, Trash, Image as ImageIcon, LayoutGrid, Settings, Plus, Eye, EyeOff, Save
+  ShieldCheck, ShieldAlert, Users, PackageOpen, ClipboardList, Wallet, RefreshCcw, 
+  UserPlus, Trash, Image as ImageIcon, LayoutGrid, Settings, Plus, Eye, EyeOff, Save,
+  Ticket
 } from 'lucide-react';
 
 import { API_BASE } from '../config';
-
-const fallbackBanners = [
-  { _id: 'b1', title: 'The Royal Jaipur Heritage', image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=1200', link: '/products?category=Handcrafted%20Sarees', isActive: true },
-  { _id: 'b2', title: 'Intricate Handcrafted Bridal Wear', image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=1200', link: '/products?category=Designer%20Lehengas', isActive: true }
-];
-
-const fallbackCategories = [
-  { _id: 'cat1', name: 'Handcrafted Sarees', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600' },
-  { _id: 'cat2', name: 'Designer Lehengas', image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=600' },
-  { _id: 'cat3', name: 'Royal Anarkalis', image: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600' },
-  { _id: 'cat4', name: 'Jaipur Fusion Wear', image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=600' },
-  { _id: 'cat5', name: 'Bridal & Festive', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600' },
-  { _id: 'cat6', name: 'Artisan Jackets & Dupattas', image: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=600' }
-];
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -38,6 +25,12 @@ export default function AdminDashboard() {
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [coupons, setCoupons] = useState([]);
+
+  // Coupon Creation Form States
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponDiscount, setNewCouponDiscount] = useState('');
+  const [newCouponExpiry, setNewCouponExpiry] = useState('');
 
   // Banner Creation Form States
   const [newBannerTitle, setNewBannerTitle] = useState('');
@@ -72,7 +65,7 @@ export default function AdminDashboard() {
     try {
       // Fetch Analytics
       const res = await fetch(`${API_BASE}/admin/analytics`, {
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -81,7 +74,7 @@ export default function AdminDashboard() {
 
       // Fetch Users
       const usersRes = await fetch(`${API_BASE}/admin/users`, {
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (usersRes.ok) {
         const usersData = await usersRes.json();
@@ -102,26 +95,17 @@ export default function AdminDashboard() {
         setCategories(categoriesData);
       }
 
-    } catch (err) {
-      console.warn('API connection failed. Simulating admin dashboard mock stats.');
-      setAnalytics({
-        summary: { totalProducts: 8, totalUsers: 14, totalOrders: 25, totalSales: 178500 },
-        salesByDate: [
-          { date: '2026-05-18', sales: 24000 },
-          { date: '2026-05-19', sales: 35000 },
-          { date: '2026-05-20', sales: 19000 },
-          { date: '2026-05-21', sales: 42000 },
-          { date: '2026-05-22', sales: 58500 }
-        ],
-        orderStatusCount: { Pending: 2, Processing: 5, Shipped: 10, 'Out For Delivery': 3, Delivered: 4, Cancelled: 1 }
+      // Fetch Coupons
+      const couponsRes = await fetch(`${API_BASE}/coupons`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
-      setUsersList([
-        { _id: 'u1', name: 'Mradhul Admin', email: 'admin@mradhulfashion.com', role: 'admin' },
-        { _id: 'u2', name: 'Sample Customer', email: 'customer@mradhulfashion.com', role: 'customer' },
-        { _id: 'u3', name: 'Sneha Rao', email: 'sneha@gmail.com', role: 'customer' }
-      ]);
-      setBanners(fallbackBanners);
-      setCategories(fallbackCategories);
+      if (couponsRes.ok) {
+        const couponsData = await couponsRes.json();
+        setCoupons(couponsData);
+      }
+
+    } catch (err) {
+      setErrorMsg('Unable to load admin data. Check API availability and your admin session.');
     } finally {
       setLoading(false);
     }
@@ -152,7 +136,7 @@ export default function AdminDashboard() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify({ role: newRole })
       });
@@ -164,8 +148,7 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to update role.');
       }
     } catch (err) {
-      setUsersList(prev => prev.map(u => u._id === targetUserId ? { ...u, role: newRole } : u));
-      setSuccessMsg('User role updated successfully (Mock mode).');
+      setErrorMsg('Unable to update this user role right now.');
     } finally {
       setActionLoading(false);
     }
@@ -177,7 +160,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`${API_BASE}/admin/users/${targetUserId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (res.ok) {
         checkAdminAndFetch();
@@ -187,8 +170,72 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to delete user.');
       }
     } catch (err) {
-      setUsersList(prev => prev.filter(u => u._id !== targetUserId));
-      setSuccessMsg('User deleted successfully (Mock mode).');
+      setErrorMsg('Unable to delete this user right now.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Coupon CRUD Operations
+  const handleCreateCoupon = async (e) => {
+    e.preventDefault();
+    if (!newCouponCode || !newCouponDiscount || !newCouponExpiry) {
+      setErrorMsg('All fields are required to create a coupon.');
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`${API_BASE}/coupons`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
+        },
+        body: JSON.stringify({
+          code: newCouponCode.toUpperCase(),
+          discountPercentage: Number(newCouponDiscount),
+          expiryDate: newCouponExpiry
+        })
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setCoupons([...coupons, created]);
+        setSuccessMsg(`Coupon ${newCouponCode.toUpperCase()} created successfully!`);
+        setNewCouponCode('');
+        setNewCouponDiscount('');
+        setNewCouponExpiry('');
+      } else {
+        const data = await res.json();
+        setErrorMsg(data.message || 'Failed to create coupon.');
+      }
+    } catch (err) {
+      setErrorMsg('Unable to create this coupon right now.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteCoupon = async (couponId) => {
+    if (!confirm('Are you sure you want to delete this coupon?')) return;
+    setActionLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`${API_BASE}/coupons/${couponId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
+      });
+      if (res.ok) {
+        setCoupons(coupons.filter(c => c._id !== couponId));
+        setSuccessMsg('Coupon removed successfully.');
+      } else {
+        const data = await res.json();
+        setErrorMsg(data.message || 'Failed to delete coupon.');
+      }
+    } catch (err) {
+      setErrorMsg('Unable to delete this coupon right now.');
     } finally {
       setActionLoading(false);
     }
@@ -211,7 +258,7 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify(newBanner)
       });
@@ -227,12 +274,7 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to create banner.');
       }
     } catch (err) {
-      const mockId = 'bmock_' + Date.now();
-      setBanners(prev => [...prev, { ...newBanner, _id: mockId }]);
-      setSuccessMsg('Banner created successfully (Mock mode).');
-      setNewBannerTitle('');
-      setNewBannerImage('');
-      setNewBannerLink('');
+      setErrorMsg('Unable to create this banner right now.');
     } finally {
       setActionLoading(false);
     }
@@ -247,7 +289,7 @@ export default function AdminDashboard() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify({ isActive: !isActive })
       });
@@ -259,8 +301,7 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to update banner status.');
       }
     } catch (err) {
-      setBanners(prev => prev.map(b => b._id === bannerId ? { ...b, isActive: !isActive } : b));
-      setSuccessMsg('Banner status updated (Mock mode).');
+      setErrorMsg('Unable to update this banner right now.');
     } finally {
       setActionLoading(false);
     }
@@ -274,7 +315,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`${API_BASE}/banners/${bannerId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (res.ok) {
         setBanners(prev => prev.filter(b => b._id !== bannerId));
@@ -284,8 +325,7 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to delete banner.');
       }
     } catch (err) {
-      setBanners(prev => prev.filter(b => b._id !== bannerId));
-      setSuccessMsg('Banner deleted successfully (Mock mode).');
+      setErrorMsg('Unable to delete this banner right now.');
     } finally {
       setActionLoading(false);
     }
@@ -308,7 +348,7 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify(newCategory)
       });
@@ -323,11 +363,7 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to create category.');
       }
     } catch (err) {
-      const mockId = 'cmock_' + Date.now();
-      setCategories(prev => [...prev, { ...newCategory, _id: mockId }]);
-      setSuccessMsg('Collection category created successfully (Mock mode).');
-      setNewCategoryName('');
-      setNewCategoryImage('');
+      setErrorMsg('Unable to create this collection right now.');
     } finally {
       setActionLoading(false);
     }
@@ -341,7 +377,7 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`${API_BASE}/categories/${catId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${user.token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
       });
       if (res.ok) {
         setCategories(prev => prev.filter(c => c._id !== catId));
@@ -351,8 +387,7 @@ export default function AdminDashboard() {
         setErrorMsg(data.message || 'Failed to delete category.');
       }
     } catch (err) {
-      setCategories(prev => prev.filter(c => c._id !== catId));
-      setSuccessMsg('Category deleted successfully (Mock mode).');
+      setErrorMsg('Unable to delete this collection right now.');
     } finally {
       setActionLoading(false);
     }
@@ -453,6 +488,15 @@ export default function AdminDashboard() {
         >
           <Settings size={16} /> Homepage Controls
         </button>
+
+        <button
+          onClick={() => { setActiveTab('coupons'); setErrorMsg(''); setSuccessMsg(''); }}
+          className={`pb-3 text-sm font-bold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === 'coupons' ? 'text-brand-primary border-brand-primary' : 'text-gray-400 border-transparent hover:text-gray-600'
+          }`}
+        >
+          <Ticket size={16} /> Promo Coupons
+        </button>
       </div>
 
       {/* TAB 1: ANALYTICS & USER MANAGER */}
@@ -540,6 +584,46 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* Alerts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-[#FAF7F2] p-6 rounded-3xl border border-red-200 shadow-sm flex flex-col gap-4">
+              <h4 className="font-serif text-lg font-bold text-red-700 flex items-center gap-2">
+                <ShieldAlert size={20} /> Low Stock Alerts
+              </h4>
+              <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-2">
+                {analytics?.alerts?.lowStockProducts?.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">Inventory levels are healthy.</p>
+                ) : (
+                  analytics?.alerts?.lowStockProducts?.map(p => (
+                    <div key={p._id} className="flex justify-between items-center text-xs bg-white p-2.5 rounded-xl border border-red-100">
+                      <span className="font-semibold text-gray-800">{p.name}</span>
+                      <span className="text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-md">Stock: {p.stock}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="bg-[#FAF7F2] p-6 rounded-3xl border border-brand-gold/20 shadow-sm flex flex-col gap-4">
+              <h4 className="font-serif text-lg font-bold text-brand-primary flex items-center gap-2">
+                <PackageOpen size={20} /> Action Required: Pending Orders
+              </h4>
+              <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-2">
+                {analytics?.alerts?.pendingOrders?.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">No pending orders.</p>
+                ) : (
+                  analytics?.alerts?.pendingOrders?.map(o => (
+                    <div key={o._id} className="flex justify-between items-center text-xs bg-white p-2.5 rounded-xl border border-brand-gold/10">
+                      <span className="font-mono text-gray-600">ID: {o._id.substring(o._id.length - 6)}</span>
+                      <span className="font-semibold text-brand-primary">₹{o.totalPrice}</span>
+                      <Link href="/admin/orders" className="text-brand-gold font-bold hover:underline">Process &rarr;</Link>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* User Account Registry Table */}
           <div className="bg-white p-6 rounded-3xl border border-brand-gold/15 shadow-sm">
             <h4 className="font-serif text-lg font-bold mb-4 text-[#2B1D20]">Registered Accounts Manager</h4>
@@ -568,7 +652,7 @@ export default function AdminDashboard() {
                       <td className="py-3.5 px-4 flex items-center justify-center gap-3">
                         <button
                           onClick={() => handleToggleRole(usr._id, usr.role)}
-                          disabled={actionLoading || usr.email === 'admin@mradhulfashion.com'}
+                          disabled={actionLoading || usr.email === user?.email}
                           className="text-xs font-bold text-brand-primary hover:underline flex items-center gap-1 bg-brand-primary/5 px-2.5 py-1.5 rounded-lg border border-brand-primary/10 disabled:opacity-40"
                         >
                           <UserPlus size={12} /> Toggle Role
@@ -936,6 +1020,142 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-2 text-xs text-brand-primary font-bold">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse"></span>
               All section settings apply in real-time on the homepage client layout.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: COUPON SYSTEM MANAGER */}
+      {activeTab === 'coupons' && (
+        <div className="flex flex-col gap-8 animate-slide-up">
+          {/* Top Panel: Form & Stats */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Create Coupon Card */}
+            <div className="lg:col-span-1 bg-white p-6 rounded-3xl border border-brand-gold/15 shadow-sm flex flex-col gap-4">
+              <div className="border-b border-brand-gold/10 pb-3 mb-2">
+                <h4 className="font-serif text-base font-bold text-[#2B1D20] flex items-center gap-2">
+                  <Plus size={18} className="text-brand-primary" /> Create New Coupon
+                </h4>
+                <p className="text-[10px] text-gray-500 font-light mt-0.5">Add a promotional discount code for customers.</p>
+              </div>
+
+              <form onSubmit={handleCreateCoupon} className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-bold text-gray-400">Coupon Code</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., JAIPUR20"
+                    value={newCouponCode}
+                    onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                    className="w-full bg-[#FAF7F2] border border-brand-gold/10 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-700 font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-bold text-gray-400">Discount (%)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    max="100"
+                    placeholder="e.g., 20"
+                    value={newCouponDiscount}
+                    onChange={(e) => setNewCouponDiscount(e.target.value)}
+                    className="w-full bg-[#FAF7F2] border border-brand-gold/10 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-700"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] uppercase font-bold text-gray-400">Expiry Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={newCouponExpiry}
+                    onChange={(e) => setNewCouponExpiry(e.target.value)}
+                    className="w-full bg-[#FAF7F2] border border-brand-gold/10 rounded-xl px-3.5 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-700"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="mt-2 w-full bg-brand-primary hover:bg-[#B3143F] text-white text-xs font-bold uppercase tracking-wider py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  {actionLoading ? <RefreshCcw className="animate-spin" size={14} /> : <Plus size={14} />} Create Coupon
+                </button>
+              </form>
+            </div>
+
+            {/* List Coupons Table Card */}
+            <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-brand-gold/15 shadow-sm flex flex-col gap-4">
+              <div className="border-b border-brand-gold/10 pb-3 mb-2 flex items-center justify-between">
+                <div>
+                  <h4 className="font-serif text-base font-bold text-[#2B1D20] flex items-center gap-2">
+                    <Ticket size={18} className="text-brand-primary" /> Active System Coupons
+                  </h4>
+                  <p className="text-[10px] text-gray-500 font-light mt-0.5">Manage existing discount offers and validity terms.</p>
+                </div>
+                <span className="text-[10px] font-bold bg-brand-primary/10 text-brand-primary px-2.5 py-1 rounded-full uppercase">
+                  {coupons.length} Code{coupons.length !== 1 && 's'}
+                </span>
+              </div>
+
+              {coupons.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Ticket className="text-brand-gold/40 animate-pulse" size={36} />
+                  <p className="text-xs text-gray-400 italic mt-3">No promotional coupons are currently configured.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-brand-gold/10 text-gray-400 uppercase text-[9px] tracking-wider">
+                        <th className="pb-3 font-semibold">Code</th>
+                        <th className="pb-3 font-semibold">Discount</th>
+                        <th className="pb-3 font-semibold">Expiry Date</th>
+                        <th className="pb-3 font-semibold">Status</th>
+                        <th className="pb-3 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {coupons.map((coupon) => {
+                        const isExpired = new Date(coupon.expiryDate) < new Date();
+                        return (
+                          <tr key={coupon._id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                            <td className="py-3 font-mono font-bold text-gray-800 tracking-wider text-xs uppercase">{coupon.code}</td>
+                            <td className="py-3 font-semibold text-brand-primary text-xs">{coupon.discountPercentage}% Off</td>
+                            <td className="py-3 text-gray-500 text-xs">
+                              {new Date(coupon.expiryDate).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </td>
+                            <td className="py-3 text-xs">
+                              {isExpired ? (
+                                <span className="text-[9px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase">Expired</span>
+                              ) : (
+                                <span className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full uppercase">Active</span>
+                              )}
+                            </td>
+                            <td className="py-3 text-right">
+                              <button
+                                onClick={() => handleDeleteCoupon(coupon._id)}
+                                disabled={actionLoading}
+                                className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg transition-colors inline-block"
+                                title="Delete Coupon"
+                              >
+                                <Trash size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -2,105 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import HeroSlider from '../components/HeroSlider';
 import ProductCard from '../components/ProductCard';
 import { Percent, Flame, ArrowRight, Sparkles, RefreshCcw, Star, Quote } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-import { API_BASE } from './config';
-
-const fallbackCategories = [
-  { _id: 'cat1', name: 'Handcrafted Sarees', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600' },
-  { _id: 'cat2', name: 'Designer Lehengas', image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=600' },
-  { _id: 'cat3', name: 'Royal Anarkalis', image: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=600' },
-  { _id: 'cat4', name: 'Jaipur Fusion Wear', image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=600' },
-  { _id: 'cat5', name: 'Bridal & Festive', image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=600' },
-  { _id: 'cat6', name: 'Artisan Jackets & Dupattas', image: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=600' }
-];
-
-const fallbackProducts = [
-  {
-    _id: 'p1',
-    name: 'Royale Jaipur Gota Patti Saree',
-    description: 'A breathtaking royal georgette saree, hand-embellished by Jaipur heritage artisans. Features detailed gota-patti embroidery borders, traditional hand-block floral motifs, and delicate hand-stitched gold sequins. Fits elegantly for festive banquets and weddings.',
-    price: 18999,
-    discountPrice: 14999,
-    category: 'Handcrafted Sarees',
-    images: ['https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800'],
-    sizes: ['Free Size'],
-    stock: 12,
-    rating: 4.9,
-    numReviews: 24,
-    isTrending: true,
-    isFlashSale: false
-  },
-  {
-    _id: 'p2',
-    name: 'Heritage Leheriya Silk Anarkali',
-    description: 'This royal tie-dye Leheriya Anarkali suit set is crafted from pure hand-loomed Banarasi silk. Embellished with fine mirror embroidery and gold zardozi work along the neck and flare. Includes matching churidar and a sheer chiffon dupatta.',
-    price: 14499,
-    discountPrice: 11999,
-    category: 'Royal Anarkalis',
-    images: ['https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=800'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 15,
-    rating: 4.8,
-    numReviews: 16,
-    isTrending: true,
-    isFlashSale: false
-  },
-  {
-    _id: 'p3',
-    name: 'Shahi Zardozi Bridal Lehenga',
-    description: 'A masterpiece of royal bridal couture. Tailored in pure mulberry raw silk with heavy zardozi, hand-woven gold dori, and real semi-precious bead embellishments. The flare is detailed with traditional palace arch motifs handcrafted by Jaipur master artisans over 300 hours.',
-    price: 49999,
-    discountPrice: 42999,
-    category: 'Bridal & Festive',
-    images: ['https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=800'],
-    sizes: ['S', 'M', 'L'],
-    stock: 5,
-    rating: 5.0,
-    numReviews: 10,
-    isTrending: true,
-    isFlashSale: false
-  },
-  {
-    _id: 'p4',
-    name: 'Sanganeri Print Peplum & Palazzo Set',
-    description: 'A contemporary fusion coordinate set featuring a Sanganeri block printed peplum top with hand-embellished dabka outlines, paired with lightweight floating georgette palazzo pants.',
-    price: 8999,
-    discountPrice: 6999,
-    category: 'Jaipur Fusion Wear',
-    images: ['https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=800'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 18,
-    rating: 4.5,
-    numReviews: 14,
-    isTrending: false,
-    isFlashSale: true
-  },
-  {
-    _id: 'p5',
-    name: 'Shekhawati Hand-Embroidered Velvet Jacket',
-    description: 'A luxurious velvet jacket intricately detailed with traditional Shekhawati hand-embroidery. Embellished with fine dabka threadwork, mirror details, and brass buttons. Perfect to layer over modern or traditional ethnic ensembles.',
-    price: 12999,
-    discountPrice: 9999,
-    category: 'Artisan Jackets & Dupattas',
-    images: ['https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800'],
-    sizes: ['S', 'M', 'L', 'XL'],
-    stock: 8,
-    rating: 4.9,
-    numReviews: 9,
-    isTrending: true,
-    isFlashSale: false
-  }
-];
+import { API_BASE, BRAND_DESCRIPTION, BRAND_NAME, SEO_IMAGES, canonicalUrl } from './config';
 
 export default function Home() {
   const router = useRouter();
-  const [categories, setCategories] = useState(fallbackCategories);
-  const [products, setProducts] = useState(fallbackProducts);
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [catalogError, setCatalogError] = useState('');
   const [timeLeft, setTimeLeft] = useState({ hours: 24, minutes: 0, seconds: 0 });
   const [sectionSettings, setSectionSettings] = useState({
     showHero: true,
@@ -145,7 +61,7 @@ export default function Home() {
           if (prodData.products && prodData.products.length) setProducts(prodData.products);
         }
       } catch (err) {
-        console.warn('Backend API offline. Using preloaded dummy datasets for catalog visualization.');
+        setCatalogError('Live collections are temporarily unavailable. Please refresh shortly.');
       } finally {
         setLoading(false);
       }
@@ -174,49 +90,98 @@ export default function Home() {
   const flashSaleItems = products.filter(p => p.isFlashSale);
   const trendingItems = products.filter(p => p.isTrending);
 
+  const shopSchema = {
+    "@context": "https://schema.org",
+    "@type": "OnlineStore",
+    "name": BRAND_NAME,
+    "description": BRAND_DESCRIPTION,
+    "url": canonicalUrl('/'),
+    "logo": SEO_IMAGES.logo,
+    "image": SEO_IMAGES.social,
+    "priceRange": "INR",
+    "sameAs": [
+      canonicalUrl('/')
+    ]
+  };
+
   return (
     <div className="flex flex-col w-full pb-16 bg-[#FAF7F2] text-[#1E1617]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(shopSchema) }}
+      />
       {/* 1. Hero Sliders */}
       {sectionSettings.showHero && <HeroSlider />}
 
       {/* 2. Premium Category Bubbles */}
       {sectionSettings.showCategories && (
-        <section className="py-16 px-4 md:px-12 bg-white dark:bg-brand-charcoal/50 w-full transition-colors border-b border-brand-gold/10">
+        <motion.section 
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+          className="py-16 px-4 md:px-12 bg-white dark:bg-brand-charcoal/50 w-full transition-colors border-b border-brand-gold/10"
+        >
         <div className="max-w-7xl mx-auto">
           <span className="text-[10px] font-bold tracking-[0.3em] text-brand-gold uppercase text-center block mb-2">CURATED HERITAGE</span>
           <h2 className="font-serif text-3xl md:text-4xl font-semibold tracking-wider text-center mb-10 text-brand-primary flex items-center justify-center gap-2">
             Shop by Collection
           </h2>
           
+          {catalogError && categories.length === 0 ? (
+            <div className="mx-auto max-w-md rounded-2xl border border-brand-gold/15 bg-[#FAF7F2] px-6 py-8 text-center text-sm text-gray-600">
+              {catalogError}
+            </div>
+          ) : (
           <div className="flex items-center justify-center gap-8 overflow-x-auto pb-4 scrollbar-thin">
-            {categories.map((cat) => (
-              <button
+            {categories.map((cat, index) => (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.8 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
                 key={cat._id || cat.name}
                 onClick={() => router.push(`/products?category=${encodeURIComponent(cat.name)}`)}
                 className="flex flex-col items-center gap-3 group flex-shrink-0 focus:outline-none"
               >
                 <div className="h-24 w-24 md:h-28 md:w-28 rounded-full overflow-hidden border border-brand-gold/20 group-hover:border-brand-primary p-1.5 transition-all duration-500 shadow-sm group-hover:shadow-lg bg-[#FAF7F2]">
-                  <img
+                  <Image
                     src={cat.image}
                     alt={cat.name}
+                    width={112}
+                    height={112}
+                    sizes="112px"
                     className="h-full w-full object-cover rounded-full group-hover:scale-110 transition-transform duration-500"
                   />
                 </div>
                 <span className="text-xs md:text-sm font-semibold tracking-widest text-[#2B1D20] dark:text-gray-200 group-hover:text-brand-primary transition-colors uppercase">
                   {cat.name}
                 </span>
-              </button>
+              </motion.button>
             ))}
           </div>
+          )}
         </div>
-        </section>
+        </motion.section>
       )}
 
       {/* 3. Handcrafted in Jaipur / Brand Storytelling */}
       {sectionSettings.showStory && (
-        <section className="py-20 px-4 md:px-12 max-w-7xl mx-auto w-full">
+        <motion.section 
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.7 }}
+          className="py-20 px-4 md:px-12 max-w-7xl mx-auto w-full"
+        >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div className="relative group overflow-hidden rounded-3xl border border-brand-gold/20 shadow-xl">
+          <motion.div 
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="relative group overflow-hidden rounded-3xl border border-brand-gold/20 shadow-xl"
+          >
             <img 
               src="https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800" 
               alt="Jaipur Heritage Artisans" 
@@ -228,9 +193,15 @@ export default function Home() {
                 <h4 className="font-serif text-xl font-semibold">Supporting 150+ Artisans in Jaipur</h4>
               </div>
             </div>
-          </div>
+          </motion.div>
           
-          <div className="flex flex-col gap-6 lg:pl-6">
+          <motion.div 
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="flex flex-col gap-6 lg:pl-6"
+          >
             <span className="text-xs font-bold tracking-[0.3em] text-brand-gold uppercase">OUR HERITAGE STORY</span>
             <h3 className="font-serif text-3xl md:text-5xl font-semibold text-brand-primary leading-tight">
               Handcrafted in Jaipur, Made for Royalty
@@ -256,9 +227,9 @@ export default function Home() {
                 <p className="text-[10px] text-gray-500 tracking-wider uppercase font-semibold mt-1">Jaipur Villages</p>
               </div>
             </div>
+          </motion.div>
           </div>
-          </div>
-        </section>
+        </motion.section>
       )}
 
       {/* 4. Bridal & Festive Collections Editorial Banner Cards */}
@@ -367,9 +338,16 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {trendingItems.slice(0, 8).map((product) => (
-              <ProductCard key={product._id} product={product} />
-            ))}
+            {trendingItems.length > 0 ? (
+              trendingItems.slice(0, 8).map((product) => (
+                <ProductCard key={product._id} product={product} />
+              ))
+            ) : (
+              <div className="col-span-full rounded-3xl border border-brand-gold/15 bg-white px-6 py-12 text-center">
+                <h3 className="font-serif text-xl font-semibold text-brand-primary">Collections are being prepared</h3>
+                <p className="mt-2 text-sm text-gray-500">{catalogError || 'Please check back shortly for live arrivals.'}</p>
+              </div>
+            )}
           </div>
         )}
       </section>

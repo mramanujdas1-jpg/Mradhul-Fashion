@@ -72,6 +72,21 @@ export default function CheckoutPage() {
     setAddresses(user.addresses || []);
   }, [user, cart]);
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleAddAddress = async (e) => {
     e.preventDefault();
     if (!newName || !newPhone || !newStreet || !newCity || !newState || !newZip) {
@@ -85,7 +100,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify({
           name: newName,
@@ -114,21 +129,7 @@ export default function CheckoutPage() {
         setErrorMsg(data.message || 'Failed to add address.');
       }
     } catch (err) {
-      console.warn('API error creating address. Running offline fallback address builder.');
-      const localAdd = {
-        _id: `add_${Math.random().toString(36).substr(2, 9)}`,
-        name: newName,
-        phone: newPhone,
-        streetAddress: newStreet,
-        city: newCity,
-        state: newState,
-        postalCode: newZip,
-        isDefault: false
-      };
-      const updated = [...addresses, localAdd];
-      setAddresses(updated);
-      setSelectedAddressIndex(updated.length - 1);
-      setAddressFormOpen(false);
+      setErrorMsg('Unable to save this address right now. Please check your connection and try again.');
     }
   };
 
@@ -141,6 +142,12 @@ export default function CheckoutPage() {
     setLoading(true);
 
     const shippingAddress = addresses[selectedAddressIndex];
+
+    if (paymentMethod === 'Razorpay' && !process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) {
+      setErrorMsg('Prepaid checkout is temporarily unavailable. Please choose Cash on Delivery.');
+      setLoading(false);
+      return;
+    }
 
     const orderPayload = {
       orderItems: cart,
@@ -164,40 +171,88 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
         body: JSON.stringify(orderPayload)
       });
 
       const data = await res.json();
       if (res.ok) {
-        // If razorpay, simulate payment completion
+        // If razorpay, trigger the actual SDK checkout dialog
         if (paymentMethod === 'Razorpay') {
-          // Simulate Razorpay popup delay
-          setTimeout(async () => {
-            try {
-              const payRes = await fetch(`${API_BASE}/orders/${data._id}/pay`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${user.token}`
-                },
-                body: JSON.stringify({
-                  razorpay_payment_id: `pay_rzp_mock_${Math.random().toString(36).substr(2, 9)}`
-                })
-              });
-              const paidData = await payRes.json();
-              setPlacedOrderInfo(paidData);
-              setOrderPlacedSuccess(true);
-              clearCart();
-              setLoading(false);
-            } catch (payErr) {
-              setErrorMsg('Verification of Mock Razorpay gateway payment failed.');
-              setLoading(false);
+          const loaded = await loadRazorpayScript();
+          if (!loaded) {
+            setErrorMsg('Unable to load Razorpay payment gateway. Check your internet connection.');
+            setLoading(false);
+            return;
+          }
+
+          const rzpOrderId = data.paymentResult?.id;
+
+          if (!rzpOrderId || !rzpOrderId.startsWith('order_')) {
+            setErrorMsg('Unable to initialize Razorpay for this order. Please try again or choose Cash on Delivery.');
+            setLoading(false);
+            return;
+          }
+
+          const options = {
+            key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+            amount: Math.round(data.totalPrice * 100),
+            currency: 'INR',
+            name: 'Mradhul Fashion',
+            description: 'Jaipur Luxury Handcrafted Apparel',
+            image: '/logo.png',
+            order_id: rzpOrderId,
+            handler: async function (response) {
+              try {
+                setLoading(true);
+                const payRes = await fetch(`${API_BASE}/orders/${data._id}/pay`, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
+                  },
+                  body: JSON.stringify({
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature
+                  })
+                });
+
+                if (payRes.ok) {
+                  const paidData = await payRes.json();
+                  setPlacedOrderInfo(paidData);
+                  setOrderPlacedSuccess(true);
+                  clearCart();
+                } else {
+                  const errData = await payRes.json();
+                  setErrorMsg(errData.message || 'Payment verification failed.');
+                }
+              } catch (err) {
+                setErrorMsg('Network error verifying payment.');
+              } finally {
+                setLoading(false);
+              }
+            },
+            prefill: {
+              name: user.name,
+              email: user.email,
+              contact: shippingAddress.phone || ''
+            },
+            theme: {
+              color: '#701122'
+            },
+            modal: {
+              ondismiss: function () {
+                setLoading(false);
+              }
             }
-          }, 2000);
+          };
+
+          const rzp = new window.Razorpay(options);
+          rzp.open();
         } else {
-          // COD Placement is synchronous
+          // COD placement
           setPlacedOrderInfo(data);
           setOrderPlacedSuccess(true);
           clearCart();
@@ -208,19 +263,8 @@ export default function CheckoutPage() {
         setLoading(false);
       }
     } catch (err) {
-      console.warn('API error placing order. Triggering offline mock checkout.');
-      // Simulate successful offline checkout
-      setTimeout(() => {
-        setPlacedOrderInfo({
-          _id: `order_mock_${Math.random().toString(36).substr(2, 9)}`,
-          paymentMethod,
-          totalPrice: checkoutDetails.totalPrice,
-          createdAt: new Date().toISOString()
-        });
-        setOrderPlacedSuccess(true);
-        clearCart();
-        setLoading(false);
-      }, 1500);
+      setErrorMsg('Unable to place this order right now. Please try again in a moment.');
+      setLoading(false);
     }
   };
 

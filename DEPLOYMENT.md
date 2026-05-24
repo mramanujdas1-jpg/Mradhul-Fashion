@@ -4,7 +4,7 @@ This document describes how to deploy the **Mradhul Fashion** backend, frontend,
 
 ---
 
-## 1. Backend Deployment (Render)
+## 1. Backend Deployment (Railway or Render)
 
 Render is a premium, cloud platform ideal for hosting the Node.js Express server.
 
@@ -27,12 +27,12 @@ Render is a premium, cloud platform ideal for hosting the Node.js Express server
 5. Click **Advanced** and add the following **Environment Variables**:
    - `PORT`: `5000` (Render will override if needed, but defaults are fine)
    - `MONGO_URI`: *[Your MongoDB Atlas Connection String]*
-   - `JWT_SECRET`: *[A secure random string used for JWT signature]*
-   - `RAZORPAY_KEY_ID`: *[Your Razorpay test key, if integrating]*
+   - `RAZORPAY_KEY_ID`: *[Your live Razorpay key]*
    - `RAZORPAY_KEY_SECRET`: *[Your Razorpay secret key, if integrating]*
-6. Click **Create Web Service**. Render will build and deploy your API. Once deployment completes, note down the API URL (e.g. `https://mradhul-fashion-api.onrender.com`).
-7. **Database Seeding**: Once online, seed the database with mock products.
-   - You can connect via SSH on Render and run `npm run seed` in your service terminal, or trigger seeding by running it locally while pointing the `MONGO_URI` to your Atlas cluster.
+   - `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`: *[Firebase Admin SDK credentials]*
+   - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: *[Cloudinary upload credentials]*
+6. Deploy the service and point your API domain, for example `https://api.mradhulfashion.com`, to the deployed backend.
+7. **Database Seeding**: only run seed scripts intentionally against the correct MongoDB Atlas database. Do not run seed scripts on a live catalog unless you are deliberately importing approved production product data.
 
 ---
 
@@ -51,8 +51,12 @@ Next.js projects deploy natively to Vercel with automatic configuration.
    - **Install Command**: `npm install`
 4. Under **Environment Variables**, add:
    - **Key**: `NEXT_PUBLIC_API_URL`
-   - **Value**: `https://mradhul-fashion-api.onrender.com/api` (Point this to your backend service deployed on Render)
-5. Click **Deploy**. Vercel will install dependencies, compile the production bundle, and assign your site a custom URL (e.g., `https://mradhul-fashion.vercel.app`).
+   - **Value**: `https://api.mradhulfashion.com/api`
+   - **Key**: `NEXT_PUBLIC_SITE_URL`
+   - **Value**: `https://mradhulfashion.com`
+   - **Key**: `NEXT_PUBLIC_WWW_SITE_URL`
+   - **Value**: `https://www.mradhulfashion.com`
+5. Add `mradhulfashion.com` and `www.mradhulfashion.com` as production domains, then deploy.
 
 ---
 
@@ -115,10 +119,9 @@ eas project:init
 ```
 
 #### Step 3: Configure Env Variables for Mobile Build
-Before building, ensure the API endpoint is configured for the production API. In `mobile/app.json` or `mobile/context.js`, update the fallback `API_HOST` pointing to the deployed Render server:
-```javascript
-// Example modification in mobile/context.js or environment config
-const API_HOST = 'https://mradhul-fashion-api.onrender.com/api';
+Before building, configure the production API endpoint through Expo environment variables:
+```bash
+EXPO_PUBLIC_API_URL=https://api.mradhulfashion.com/api
 ```
 
 #### Step 4: Run the Build Command
