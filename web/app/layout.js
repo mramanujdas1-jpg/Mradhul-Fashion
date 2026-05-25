@@ -30,7 +30,6 @@ export const metadata = {
     'women ethnic wear India',
     'premium festive wear'
   ],
-  manifest: '/manifest.json',
   icons: {
     icon: '/favicon.png',
     shortcut: '/favicon.png',
@@ -75,6 +74,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="format-detection" content="telephone=no" />
         <link rel="apple-touch-icon" href="/favicon.png" />
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
       </head>
       <body className="antialiased min-h-screen flex flex-col font-sans transition-colors duration-300">
         <AppProvider>
