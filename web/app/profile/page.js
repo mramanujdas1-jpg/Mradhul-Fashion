@@ -520,13 +520,14 @@ function ProfilePageContent() {
 
           {/* Social Logins */}
           {!otpSent && (
-            <div className="flex flex-col gap-2 pt-2 border-t border-black/5 dark:border-white/5">
+            <div className="flex flex-col gap-3 pt-4 mt-2 border-t border-black/5 dark:border-white/5">
+              <p className="text-center text-[10px] uppercase font-bold text-gray-400 tracking-wider">Or continue with</p>
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                className="flex items-center justify-center gap-2 py-2.5 border border-black/10 dark:border-white/10 rounded-xl text-xs font-semibold uppercase tracking-wider bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-all"
+                className="flex items-center justify-center gap-2 py-3 border border-brand-primary/20 bg-brand-primary/5 rounded-xl text-xs font-bold text-brand-primary uppercase tracking-wider hover:bg-brand-primary/10 transition-all w-full shadow-sm"
               >
-                <LogIn size={14} /> Continue with Google
+                <LogIn size={16} /> Continue with Google
               </button>
             </div>
           )}
