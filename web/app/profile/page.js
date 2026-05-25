@@ -519,21 +519,19 @@ function ProfilePageContent() {
               </form>
             )}
 
-            {/* Social Logins - Permanently Visible Block */}
-            {!otpSent && (
-              <div className="flex flex-col gap-4 pt-6 border-t border-black/10 dark:border-white/10 w-full relative z-20">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#FAF7F2] dark:bg-[#1E1617] px-4 rounded-full border border-black/10 dark:border-white/10">
-                  <span className="text-[9px] uppercase font-bold text-gray-500 tracking-widest whitespace-nowrap">Or Continue With</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  className="flex items-center justify-center gap-3 py-3.5 border-2 border-brand-primary/30 bg-brand-primary/10 rounded-xl text-sm font-bold text-brand-primary uppercase tracking-widest hover:bg-brand-primary/20 hover:scale-[1.02] transition-all w-full shadow-md z-30"
-                >
-                  <LogIn size={18} /> Google
-                </button>
+            {/* Social Logins - 100% Unconditionally Rendered */}
+            <div className="flex flex-col gap-4 pt-6 border-t border-black/10 dark:border-white/10 w-full relative z-20">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#FAF7F2] dark:bg-[#1E1617] px-4 rounded-full border border-black/10 dark:border-white/10">
+                <span className="text-[9px] uppercase font-bold text-gray-500 tracking-widest whitespace-nowrap">OR CONTINUE WITH GOOGLE</span>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="flex items-center justify-center gap-3 py-3 bg-brand-primary text-white rounded-xl w-full text-sm font-bold uppercase tracking-widest hover:bg-brand-primaryDark transition-all shadow-md z-30"
+              >
+                <LogIn size={18} /> Google Sign-In
+              </button>
+            </div>
 
             {/* Toggle form button */}
             {!isPhoneLogin && !otpSent && (
