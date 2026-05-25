@@ -411,145 +411,149 @@ function ProfilePageContent() {
             </div>
           )}
 
-          {isPhoneLogin ? (
-            <form onSubmit={handlePhoneSubmit} className="flex flex-col gap-4">
-              {!otpSent ? (
-                <div className="relative flex items-center">
-                  <Phone size={16} className="absolute left-3 text-brand-primary" />
-                  <input
-                    type="tel"
-                    placeholder="Mobile Number (e.g. 9876543210)"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <p className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
-                    <Check size={12} /> OTP code has been sent to your mobile.
-                  </p>
+          <div className="flex flex-col w-full gap-6 relative z-10">
+            {isPhoneLogin ? (
+              <form onSubmit={handlePhoneSubmit} className="flex flex-col gap-4">
+                {!otpSent ? (
                   <div className="relative flex items-center">
-                    <Lock size={16} className="absolute left-3 text-brand-primary" />
+                    <Phone size={16} className="absolute left-3 text-brand-primary" />
                     <input
-                      type="text"
-                      placeholder="6-digit OTP Code"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
+                      type="tel"
+                      placeholder="Mobile Number (e.g. 9876543210)"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
                       className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
                       required
                     />
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-[11px] text-green-600 font-semibold flex items-center gap-1">
+                      <Check size={12} /> OTP code has been sent to your mobile.
+                    </p>
+                    <div className="relative flex items-center">
+                      <Lock size={16} className="absolute left-3 text-brand-primary" />
+                      <input
+                        type="text"
+                        placeholder="6-digit OTP Code"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
 
-              {authError && <p className="text-xs text-brand-primary font-semibold">{authError}</p>}
-              
-              <div id="recaptcha-container"></div>
+                {authError && <p className="text-xs text-brand-primary font-semibold">{authError}</p>}
+                
+                <div id="recaptcha-container"></div>
 
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="bg-brand-primary hover:bg-brand-primaryDark text-white text-xs font-bold uppercase tracking-wider py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm btn-premium w-full mt-2"
-              >
-                {authLoading ? <RefreshCcw size={14} className="animate-spin" /> : !otpSent ? 'Send OTP' : 'Verify & Sign In'}
-              </button>
-              
-              {otpSent && (
                 <button
-                  type="button"
-                  onClick={() => { setOtpSent(false); setOtp(''); }}
-                  className="text-xs text-brand-primary hover:underline font-semibold self-center"
+                  type="submit"
+                  disabled={authLoading}
+                  className="bg-brand-primary hover:bg-brand-primaryDark text-white text-xs font-bold uppercase tracking-wider py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm btn-premium w-full mt-2"
                 >
-                  Change Mobile Number
+                  {authLoading ? <RefreshCcw size={14} className="animate-spin" /> : !otpSent ? 'Send OTP' : 'Verify & Sign In'}
                 </button>
-              )}
-            </form>
-          ) : (
-            <form onSubmit={handleAuthSubmit} className="flex flex-col gap-4">
-              {!isLogin && (
+                
+                {otpSent && (
+                  <button
+                    type="button"
+                    onClick={() => { setOtpSent(false); setOtp(''); }}
+                    className="text-xs text-brand-primary hover:underline font-semibold self-center"
+                  >
+                    Change Mobile Number
+                  </button>
+                )}
+              </form>
+            ) : (
+              <form onSubmit={handleAuthSubmit} className="flex flex-col gap-4">
+                {!isLogin && (
+                  <div className="relative flex items-center">
+                    <User size={16} className="absolute left-3 text-brand-primary" />
+                    <input
+                      type="text"
+                      placeholder="Full Name"
+                      value={authName}
+                      onChange={(e) => setAuthName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
+                      required
+                    />
+                  </div>
+                )}
+
                 <div className="relative flex items-center">
-                  <User size={16} className="absolute left-3 text-brand-primary" />
+                  <Mail size={16} className="absolute left-3 text-brand-primary" />
                   <input
-                    type="text"
-                    placeholder="Full Name"
-                    value={authName}
-                    onChange={(e) => setAuthName(e.target.value)}
+                    type="email"
+                    placeholder="Email Address"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
                     required
                   />
                 </div>
-              )}
 
-              <div className="relative flex items-center">
-                <Mail size={16} className="absolute left-3 text-brand-primary" />
-                <input
-                  type="email"
-                  placeholder="Email Address"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
-                  required
-                />
+                <div className="relative flex items-center">
+                  <Lock size={16} className="absolute left-3 text-brand-primary" />
+                  <input
+                    type="password"
+                    placeholder="Account Password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
+                    required
+                  />
+                </div>
+
+                {authError && <p className="text-xs text-brand-primary font-semibold">{authError}</p>}
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  className="bg-brand-primary hover:bg-brand-primaryDark text-white text-xs font-bold uppercase tracking-wider py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm btn-premium w-full mt-2"
+                >
+                  {authLoading ? <RefreshCcw size={14} className="animate-spin" /> : isLogin ? 'Sign In' : 'Create Profile'}
+                </button>
+              </form>
+            )}
+
+            {/* Social Logins - Permanently Visible Block */}
+            {!otpSent && (
+              <div className="flex flex-col gap-4 pt-6 border-t border-black/10 dark:border-white/10 w-full relative z-20">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#FAF7F2] dark:bg-[#1E1617] px-4 rounded-full border border-black/10 dark:border-white/10">
+                  <span className="text-[9px] uppercase font-bold text-gray-500 tracking-widest whitespace-nowrap">Or Continue With</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  className="flex items-center justify-center gap-3 py-3.5 border-2 border-brand-primary/30 bg-brand-primary/10 rounded-xl text-sm font-bold text-brand-primary uppercase tracking-widest hover:bg-brand-primary/20 hover:scale-[1.02] transition-all w-full shadow-md z-30"
+                >
+                  <LogIn size={18} /> Google
+                </button>
               </div>
+            )}
 
-              <div className="relative flex items-center">
-                <Lock size={16} className="absolute left-3 text-brand-primary" />
-                <input
-                  type="password"
-                  placeholder="Account Password"
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-transparent border border-black/10 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:border-brand-primary"
-                  required
-                />
+            {/* Toggle form button */}
+            {!isPhoneLogin && !otpSent && (
+              <div className="text-center text-xs text-gray-500 font-light mt-2">
+                {isLogin ? (
+                  <span>Don't have an account?{' '}
+                    <button onClick={() => setIsLogin(false)} className="text-brand-primary font-bold hover:underline ml-1">
+                      Sign Up
+                    </button>
+                  </span>
+                ) : (
+                  <span>Already registered?{' '}
+                    <button onClick={() => setIsLogin(true)} className="text-brand-primary font-bold hover:underline ml-1">
+                      Login
+                    </button>
+                  </span>
+                )}
               </div>
-
-              {authError && <p className="text-xs text-brand-primary font-semibold">{authError}</p>}
-
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="bg-brand-primary hover:bg-brand-primaryDark text-white text-xs font-bold uppercase tracking-wider py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-sm btn-premium w-full mt-2"
-              >
-                {authLoading ? <RefreshCcw size={14} className="animate-spin" /> : isLogin ? 'Sign In' : 'Create Profile'}
-              </button>
-            </form>
-          )}
-
-          {/* Social Logins */}
-          {!otpSent && (
-            <div className="flex flex-col gap-3 pt-4 mt-2 border-t border-black/5 dark:border-white/5">
-              <p className="text-center text-[10px] uppercase font-bold text-gray-400 tracking-wider">Or continue with</p>
-              <button
-                type="button"
-                onClick={handleGoogleLogin}
-                className="flex items-center justify-center gap-2 py-3 border border-brand-primary/20 bg-brand-primary/5 rounded-xl text-xs font-bold text-brand-primary uppercase tracking-wider hover:bg-brand-primary/10 transition-all w-full shadow-sm"
-              >
-                <LogIn size={16} /> Continue with Google
-              </button>
-            </div>
-          )}
-
-          {/* Toggle form button */}
-          {!isPhoneLogin && !otpSent && (
-            <div className="text-center text-xs text-gray-500 font-light">
-              {isLogin ? (
-                <span>Don't have an account?{' '}
-                  <button onClick={() => setIsLogin(false)} className="text-brand-primary font-bold hover:underline">
-                    Sign Up
-                  </button>
-                </span>
-              ) : (
-                <span>Already registered?{' '}
-                  <button onClick={() => setIsLogin(true)} className="text-brand-primary font-bold hover:underline">
-                    Login
-                  </button>
-                </span>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
