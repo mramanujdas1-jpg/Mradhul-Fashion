@@ -43,7 +43,7 @@ export default function ProductCard({ product }) {
       className="group relative bg-white dark:bg-brand-charcoal rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 border border-brand-primary/5 flex flex-col h-full"
     >
       {/* Product Image section */}
-      <Link href={`/products/${product._id}`} className="relative block overflow-hidden aspect-[3/4] bg-gray-100">
+      <Link href={`/products/${product.slug || product._id}`} className="relative block overflow-hidden aspect-[3/4] bg-gray-100">
         <Image
           src={product.images[0]}
           alt={product.name}
@@ -98,7 +98,7 @@ export default function ProductCard({ product }) {
 
       {/* Info details */}
       <div className="p-4 flex flex-col flex-grow justify-between gap-2">
-        <Link href={`/products/${product._id}`} className="block">
+        <Link href={`/products/${product.slug || product._id}`} className="block">
           <span className="text-[11px] text-brand-gold font-bold tracking-wider uppercase">
             {product.category}
           </span>

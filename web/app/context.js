@@ -12,6 +12,7 @@ export function AppProvider({ children }) {
   const [wishlist, setWishlist] = useState([]);
   const [theme, setTheme] = useState('light');
   const [loading, setLoading] = useState(true);
+  const [cartOpen, setCartOpen] = useState(false);
 
   // Set up Firebase auth observer & local storage hydration
   useEffect(() => {
@@ -185,6 +186,7 @@ export function AppProvider({ children }) {
       syncCartToDatabase(newCart);
       return newCart;
     });
+    setCartOpen(true);
   };
 
   // Remove Item from Cart
@@ -252,7 +254,9 @@ export function AppProvider({ children }) {
         removeFromCart,
         updateCartQty,
         clearCart,
-        toggleWishlist
+        toggleWishlist,
+        cartOpen,
+        setCartOpen
       }}
     >
       {children}

@@ -114,6 +114,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get Single Product by Slug
+router.get('/slug/:slug', async (req, res) => {
+  try {
+    const product = await Product.findOne({ slug: req.params.slug });
+    if (product) {
+      const reviews = await Review.find({ product: product._id }).sort({ createdAt: -1 });
+      res.json({ product, reviews });
+    } else {
+      res.status(404).json({ message: 'Product not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get Single Product & reviews
 router.get('/:id', async (req, res) => {
   try {
@@ -211,22 +226,23 @@ router.post('/reviews/:reviewId/helpful', protect, async (req, res) => {
 
 // Admin: Create Product
 router.post('/', protect, admin, async (req, res) => {
-  const { name, price, discountPrice, description, images, category, sizes, stock, isTrending, isFlashSale, flashSaleEndsAt } = req.body;
   try {
-    const product = new Product({
-      name: name || 'Sample Product',
-      price: price || 0,
-      discountPrice: discountPrice || 0,
-      description: description || 'Sample Description',
-      images: images && images.length ? images : ['/logo.png'],
-      category: category || 'General',
-      sizes: sizes || ['S', 'M', 'L', 'XL'],
-      stock: stock || 0,
-      isTrending: isTrending || false,
-      isFlashSale: isFlashSale || false,
-      flashSaleEndsAt: flashSaleEndsAt || null
-    });
+    const productData = req.body;
+    
+    // Set some defaults if missing
+    if (!productData.name) productData.name = 'Sample Product';
+    if (!productData.description) productData.description = 'Sample Description';
+    if (!productData.category) productData.category = 'General';
+    if (!productData.brand) productData.brand = 'Mradhul';
+    
+    // Ensure stockPerSize is correctly formatted as an object
+    if (productData.stockPerSize && typeof productData.stockPerSize === 'object') {
+      // It's already an object, mongoose Map handles it
+    } else {
+      productData.stockPerSize = {};
+    }
 
+    const product = new Product(productData);
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
   } catch (error) {
@@ -236,21 +252,24 @@ router.post('/', protect, admin, async (req, res) => {
 
 // Admin: Update Product
 router.put('/:id', protect, admin, async (req, res) => {
-  const { name, price, discountPrice, description, images, category, sizes, stock, isTrending, isFlashSale, flashSaleEndsAt } = req.body;
   try {
     const product = await Product.findById(req.params.id);
     if (product) {
-      product.name = name || product.name;
-      product.price = price !== undefined ? price : product.price;
-      product.discountPrice = discountPrice !== undefined ? discountPrice : product.discountPrice;
-      product.description = description || product.description;
-      if (images) product.images = images;
-      product.category = category || product.category;
-      if (sizes) product.sizes = sizes;
-      product.stock = stock !== undefined ? stock : product.stock;
-      product.isTrending = isTrending !== undefined ? isTrending : product.isTrending;
-      product.isFlashSale = isFlashSale !== undefined ? isFlashSale : product.isFlashSale;
-      product.flashSaleEndsAt = flashSaleEndsAt !== undefined ? flashSaleEndsAt : product.flashSaleEndsAt;
+      const updateData = req.body;
+      
+      // Update fields explicitly or spread (but spreading can be risky if unhandled, so we update key fields or iterate)
+      const allowedFields = [
+        'name', 'slug', 'shortDescription', 'description', 'price', 'discountPrice', 'category', 
+        'subcategory', 'brand', 'tags', 'gender', 'fabricMaterial', 'material', 'careInstructions',
+        'images', 'variantImages', 'sizes', 'colors', 'stock', 'stockPerSize', 'sku',
+        'isTrending', 'isFlashSale', 'flashSaleEndsAt', 'specifications', 'deliveryInfo', 'returnPolicy'
+      ];
+
+      allowedFields.forEach(field => {
+        if (updateData[field] !== undefined) {
+          product[field] = updateData[field];
+        }
+      });
 
       const updatedProduct = await product.save();
       res.json(updatedProduct);

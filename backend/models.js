@@ -37,27 +37,58 @@ const categorySchema = new mongoose.Schema({
 // Product Schema
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true },
+  slug: { type: String, unique: true, sparse: true },
+  shortDescription: { type: String },
   description: { type: String, required: true },
-  price: { type: Number, required: true, default: 0 },
-  discountPrice: { type: Number, default: 0 },
+  price: { type: Number, required: true, default: 0 }, // Original Price
+  discountPrice: { type: Number, default: 0 }, // Sale Price
+  discountPercent: { type: Number, default: 0 },
   category: { type: String, required: true },
+  subcategory: { type: String },
+  brand: { type: String, required: true, default: 'Mradhul' },
+  tags: [{ type: String }],
+  gender: { type: String, enum: ['Men', 'Women', 'Kids', 'Unisex'], default: 'Women' },
+  fabricMaterial: { type: String },
+  material: { type: String },
+  careInstructions: { type: String },
   images: [{ type: String, required: true }],
-  sizes: [{ type: String, default: ['S', 'M', 'L', 'XL'] }],
-  stock: { type: Number, required: true, default: 0 },
+  variantImages: [{
+    color: { type: String },
+    images: [{ type: String }]
+  }],
+  sizes: [{ type: String }], // List of all sizes
+  colors: [{ type: String }],
+  stock: { type: Number, required: true, default: 0 }, // Total stock
+  stockPerSize: {
+    type: Map,
+    of: Number,
+    default: {}
+  },
+  sku: { type: String, unique: true, sparse: true },
   rating: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },
   isTrending: { type: Boolean, default: false },
   isFlashSale: { type: Boolean, default: false },
   flashSaleEndsAt: { type: Date },
-  brand: { type: String, required: true, default: 'Mradhul' },
-  subcategory: { type: String },
-  colors: [{ type: String }],
   specifications: [{ key: String, value: String }],
-  fabricMaterial: { type: String },
-  sku: { type: String, unique: true, sparse: true },
   deliveryInfo: { type: String },
   returnPolicy: { type: String }
 }, { timestamps: true });
+
+// Pre-save middleware to auto-calculate discount percent and generate slug if missing
+productSchema.pre('save', function (next) {
+  if (this.price > 0 && this.discountPrice > 0 && this.price > this.discountPrice) {
+    this.discountPercent = Math.round(((this.price - this.discountPrice) / this.price) * 100);
+  } else {
+    this.discountPercent = 0;
+  }
+  
+  if (!this.slug && this.name) {
+    this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    // Append random string to ensure uniqueness if needed, but for now just the name
+  }
+  next();
+});
 
 // Review Schema
 const reviewSchema = new mongoose.Schema({

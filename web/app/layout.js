@@ -2,6 +2,7 @@ import './global.css';
 import { AppProvider } from './context';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import CartDrawer from '../components/CartDrawer';
 import {
   BRAND_DESCRIPTION,
   BRAND_NAME,
@@ -79,6 +80,7 @@ export default function RootLayout({ children }) {
       <body className="antialiased min-h-screen flex flex-col font-sans transition-colors duration-300">
         <AppProvider>
           <Navbar />
+          <CartDrawer />
           <main className="flex-grow pt-28">
             {children}
           </main>

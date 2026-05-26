@@ -6,27 +6,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE } from '../app/config';
 
-const defaultSlides = [
-  {
-    image: '/banner_ethnic.png',
-    title: 'The Royal Jaipur Heritage',
-    subtitle: 'EXPERIENCE PURE ROYALTY',
-    description: 'Explore hand-embellished Gota Patti sarees, traditional Leheriya silk Anarkalis, and exquisite heritage craft.',
-    link: '/products?category=Handcrafted%20Sarees',
-    align: 'left'
-  },
-  {
-    image: '/banner_western.png',
-    title: 'Intricate Handcrafted Bridal Wear',
-    subtitle: 'THE MAHARANI BRIDAL COUTURE',
-    description: 'Discover pure mulberry raw silk lehengas detailing heavy zardozi, hand-woven gold dori, and pearl hand-embroidery.',
-    link: '/products?category=Designer%20Lehengas',
-    align: 'right'
-  }
-];
+// No hardcoded arrays. Banners are fetched from the database.
 
 export default function HeroSlider() {
-  const [slidesList, setSlidesList] = useState(defaultSlides);
+  const [slidesList, setSlidesList] = useState([]);
   const [current, setCurrent] = useState(0);
 
   const nextSlide = () => {
@@ -57,7 +40,7 @@ export default function HeroSlider() {
           }
         }
       } catch (err) {
-        console.warn('API error fetching banners, using default slides.');
+        console.warn('API error fetching banners.');
       }
     };
     fetchBanners();
@@ -69,7 +52,18 @@ export default function HeroSlider() {
     return () => clearInterval(timer);
   }, [slidesList]);
 
-  if (!slidesList || slidesList.length === 0) return null;
+  if (!slidesList || slidesList.length === 0) {
+    return (
+      <div className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden bg-[#FAF7F2] flex items-center justify-center border-b border-gray-200">
+        <div className="text-center">
+          <span className="text-[10px] font-bold tracking-[0.25em] text-brand-gold uppercase block mb-3">
+            Loading Collections
+          </span>
+          <div className="w-16 h-16 rounded-full border-4 border-brand-primary border-t-transparent animate-spin mx-auto mb-4"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden bg-brand-obsidian">

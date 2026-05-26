@@ -8,7 +8,7 @@ import { useApp } from '../app/context';
 import { ShoppingBag, Heart, User, Sun, Moon, Search, Menu, X, ShieldAlert } from 'lucide-react';
 
 export default function Navbar() {
-  const { user, cart, wishlist, theme, toggleTheme, logout } = useApp();
+  const { user, cart, wishlist, theme, toggleTheme, logout, setCartOpen } = useApp();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -138,14 +138,14 @@ export default function Navbar() {
         </Link>
 
         {/* Cart */}
-        <Link href="/cart" className="relative p-2 text-brand-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
+        <button onClick={() => setCartOpen(true)} className="relative p-2 text-brand-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors">
           <ShoppingBag size={20} />
           {cartCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-brand-primary text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
               {cartCount}
             </span>
           )}
-        </Link>
+        </button>
 
         {/* Account Profile Dropdown */}
         <div className="relative">
