@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { API_BASE } from './config';
-import { onAuthStateChange, logOut } from './firebase';
+import { onAuthStateChange, logOut, processRedirectResult } from './firebase';
 
 const AppContext = createContext();
 
@@ -30,6 +30,12 @@ export function AppProvider({ children }) {
     } catch (e) {
       console.error('Failed to parse local storage hydration:', e);
     }
+
+    // 1.5 Process potential Firebase redirect result
+    processRedirectResult().catch(err => {
+      console.error('Redirect sign-in failed:', err);
+      alert('Google Sign-In failed due to cross-origin or popup blocking. Please ensure you are not blocking cookies.');
+    });
 
     // 2. Firebase Authentication Observer
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
@@ -67,10 +73,14 @@ export function AppProvider({ children }) {
             localStorage.setItem('mf_cart', JSON.stringify(syncedUser.cart || []));
             localStorage.setItem('mf_wishlist', JSON.stringify(syncedUser.wishlist || []));
           } else {
-            console.error('Express user sync failed');
+            console.error('Express user sync failed', await response.text());
+            alert('Login failed: Our backend server is currently unable to verify your account. Please try again later.');
+            await logOut();
           }
         } catch (err) {
           console.error('Error syncing auth state with API:', err);
+          alert('Login failed: Network error occurred while contacting our servers.');
+          await logOut();
         }
       } else {
         // Clear authenticated session details on sign out

@@ -3,6 +3,7 @@ import {
   getAuth, 
   signInWithPopup, 
   signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
@@ -48,6 +49,20 @@ export const signInWithGoogle = async () => {
       console.log('[Auth] Falling back to signInWithRedirect due to mobile device or popup blocking');
       return signInWithRedirect(firebaseAuth, provider);
     }
+    throw error;
+  }
+};
+
+export const processRedirectResult = async () => {
+  const firebaseAuth = getFirebaseAuth();
+  try {
+    const result = await getRedirectResult(firebaseAuth);
+    if (result) {
+      console.log('[Auth] Google redirect success:', result.user.email);
+    }
+    return result;
+  } catch (error) {
+    console.error('[Auth] Google redirect failed:', error.code, error.message);
     throw error;
   }
 };
