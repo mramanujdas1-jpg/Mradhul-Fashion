@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../context';
 import { User, LogIn, Mail, Lock, ShieldAlert, Package, MapPin, RefreshCcw, CheckCircle2, ChevronDown, ChevronUp, Phone, Check } from 'lucide-react';
-import { signInWithGoogle, signInWithEmail, signUpWithEmail, sendOTP, isMock } from '../firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, sendOTP, isMock, getAuthErrorMessage } from '../firebase';
 
 import { API_BASE } from '../config';
 
@@ -26,6 +26,7 @@ function ProfilePageContent() {
   const [authName, setAuthName] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Phone login states
   const [isPhoneLogin, setIsPhoneLogin] = useState(false);
@@ -281,7 +282,7 @@ function ProfilePageContent() {
         router.push('/checkout');
       }
     } catch (err) {
-      setAuthError(err.message || 'Authentication failed.');
+      setAuthError(getAuthErrorMessage(err));
     } finally {
       setAuthLoading(false);
     }
@@ -289,16 +290,21 @@ function ProfilePageContent() {
 
   const handleGoogleLogin = async () => {
     setAuthError('');
-    setAuthLoading(true);
+    setGoogleLoading(true);
     try {
-      await signInWithGoogle();
-      if (redirect === 'checkout') {
-        router.push('/checkout');
+      const result = await signInWithGoogle();
+      // signInWithRedirect returns undefined (redirects the page), so only handle popup results
+      if (result) {
+        console.log('[Profile] Google sign-in completed for:', result.user.email);
+        if (redirect === 'checkout') {
+          router.push('/checkout');
+        }
       }
     } catch (err) {
-      setAuthError(err.message || 'Google authentication failed.');
+      console.error('[Profile] Google sign-in error:', err.code, err.message);
+      setAuthError(getAuthErrorMessage(err));
     } finally {
-      setAuthLoading(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -531,16 +537,25 @@ function ProfilePageContent() {
               
               <button
                 type="button"
+                id="google-signin-btn"
                 onClick={handleGoogleLogin}
-                className="flex items-center justify-center gap-3 py-3 bg-white dark:bg-[#121212] text-gray-700 dark:text-gray-200 rounded-xl w-full text-sm font-semibold border border-gray-300 dark:border-[#333] shadow-sm hover:bg-gray-50 dark:hover:bg-[#1A1A1A] hover:shadow-md transition-all z-30"
+                disabled={googleLoading || authLoading}
+                className="flex items-center justify-center gap-3 py-3.5 bg-white dark:bg-[#121212] text-gray-700 dark:text-gray-200 rounded-xl w-full text-sm font-medium border border-gray-300 dark:border-[#333] shadow-sm hover:shadow-lg hover:border-gray-400 dark:hover:border-[#555] active:scale-[0.99] transition-all duration-200 z-30 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-sm"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                Google
+                {googleLoading ? (
+                  <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="opacity-20" />
+                    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  </svg>
+                )}
+                {googleLoading ? 'Signing in...' : 'Continue with Google'}
               </button>
             </div>
 

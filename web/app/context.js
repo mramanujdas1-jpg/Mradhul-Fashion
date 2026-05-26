@@ -31,10 +31,12 @@ export function AppProvider({ children }) {
       console.error('Failed to parse local storage hydration:', e);
     }
 
-    // 1.5 Process potential Firebase redirect result
+    // 1.5 Process potential Firebase redirect result (only relevant after signInWithRedirect)
     processRedirectResult().catch(err => {
-      console.error('Redirect sign-in failed:', err);
-      alert('Google Sign-In failed due to cross-origin or popup blocking. Please ensure you are not blocking cookies.');
+      // Only alert if a real auth error occurred (not just "no redirect pending")
+      if (err?.code && err.code !== 'auth/null-user') {
+        console.error('Redirect sign-in failed:', err.code, err.message);
+      }
     });
 
     // 2. Firebase Authentication Observer
