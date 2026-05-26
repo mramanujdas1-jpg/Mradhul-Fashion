@@ -2,9 +2,7 @@ const admin = require('firebase-admin');
 const { User } = require('./models');
 
 const logInfo = (...args) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(...args);
-  }
+  console.log('[Auth]', ...args);
 };
 
 // Initialize Firebase Admin SDK if configuration exists
@@ -43,15 +41,19 @@ const protect = async (req, res, next) => {
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
       token = req.headers.authorization.split(' ')[1];
+      logInfo(`Token received for ${req.method} ${req.originalUrl} (${token.substring(0, 20)}...)`);
       
       if (!firebaseApp) {
+        console.error('[Auth] CRITICAL: Firebase Admin SDK is not initialized — cannot verify tokens');
         return res.status(500).json({ message: 'Authentication server configuration error: Firebase not initialized.' });
       }
       
       let firebaseUser;
       try {
         firebaseUser = await admin.auth().verifyIdToken(token);
+        logInfo(`Firebase token verified: uid=${firebaseUser.uid}, email=${firebaseUser.email}`);
       } catch (firebaseErr) {
+        console.error('[Auth] Firebase token verification failed:', firebaseErr.code, firebaseErr.message);
         return res.status(401).json({ message: 'Not authorized, Firebase token failed' });
       }
       
@@ -88,20 +90,24 @@ const protect = async (req, res, next) => {
       }
       
       req.user = user;
+      logInfo(`Authenticated: ${user.email} (role=${user.role}, id=${user._id})`);
       next();
     } catch (error) {
       console.error('Error in protect middleware:', error.message);
       res.status(401).json({ message: 'Not authorized, login failed' });
     }
   } else {
+    logInfo(`No token provided for ${req.method} ${req.originalUrl}`);
     res.status(401).json({ message: 'Not authorized, no token provided' });
   }
 };
 
 const adminCheck = (req, res, next) => {
   if (req.user && req.user.role === 'admin') {
+    logInfo(`Admin access granted for ${req.user.email} on ${req.method} ${req.originalUrl}`);
     next();
   } else {
+    console.error(`[Auth] Admin access DENIED for ${req.user?.email} (role=${req.user?.role}) on ${req.method} ${req.originalUrl}`);
     res.status(403).json({ message: 'Not authorized as an admin' });
   }
 };

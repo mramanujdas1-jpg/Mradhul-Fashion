@@ -176,6 +176,12 @@ export default function AdminProductsPage() {
     }
     setErrorMsg('');
 
+    const token = localStorage.getItem('mf_auth_token');
+    if (!token) {
+      setErrorMsg('Authentication token missing. Please log out and log back in.');
+      return;
+    }
+
     const payload = {
       name: formName,
       description: formDesc,
@@ -199,39 +205,52 @@ export default function AdminProductsPage() {
     const method = editingProduct ? 'PUT' : 'POST';
     const url = editingProduct ? `${API_BASE}/products/${editingProduct._id}` : `${API_BASE}/products`;
 
+    console.log(`[Admin] ${method} ${url}`, { tokenPresent: !!token, payload: payload.name });
+
     try {
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(payload)
       });
       if (res.ok) {
+        console.log(`[Admin] Product ${method === 'POST' ? 'created' : 'updated'} successfully`);
         setEditorOpen(false);
         fetchCatalog();
       } else {
         const data = await res.json();
-        setErrorMsg(data.message || 'Operation failed.');
+        console.error(`[Admin] Product ${method} failed:`, res.status, data);
+        setErrorMsg(data.message || `Operation failed (${res.status}). ${res.status === 401 ? 'Your session may have expired — please log out and log back in.' : res.status === 403 ? 'You do not have admin permissions.' : 'Please try again.'}`);
       }
     } catch (err) {
-      setErrorMsg('Unable to save this product right now. Please try again.');
+      console.error('[Admin] Product save network error:', err);
+      setErrorMsg('Network error: Unable to reach the server. Check your internet connection and try again.');
     }
   };
 
   const handleDeleteProduct = async (id) => {
     if (!confirm('Are you sure you want to remove this garment from catalog?')) return;
+    const token = localStorage.getItem('mf_auth_token');
+    console.log(`[Admin] DELETE ${API_BASE}/products/${id}`, { tokenPresent: !!token });
     try {
       const res = await fetch(`${API_BASE}/products/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
+        console.log('[Admin] Product deleted successfully');
         fetchCatalog();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        console.error('[Admin] Product delete failed:', res.status, data);
+        setErrorMsg(data.message || `Delete failed (${res.status}). ${res.status === 401 ? 'Session expired — please re-login.' : res.status === 403 ? 'Admin access required.' : 'Please try again.'}`);
       }
     } catch (err) {
-      setErrorMsg('Unable to delete this product right now. Please try again.');
+      console.error('[Admin] Product delete network error:', err);
+      setErrorMsg('Network error: Unable to reach the server. Check your internet connection.');
     }
   };
 
