@@ -19,7 +19,7 @@ const categoriesList = [
 
 export default function AdminProductsPage() {
   const router = useRouter();
-  const { user } = useApp();
+  const { user, loading: authLoading } = useApp();
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +48,7 @@ export default function AdminProductsPage() {
   const [formReturn, setFormReturn] = useState('');
 
   const fetchCatalog = async () => {
+    if (authLoading) return;
     if (!user || user.role !== 'admin') {
       router.push('/profile');
       return;
@@ -69,8 +70,10 @@ export default function AdminProductsPage() {
   };
 
   useEffect(() => {
-    fetchCatalog();
-  }, [user]);
+    if (!authLoading) {
+      fetchCatalog();
+    }
+  }, [user, authLoading]);
 
   const handleOpenNewEditor = () => {
     setEditingProduct(null);
@@ -255,7 +258,7 @@ export default function AdminProductsPage() {
       </div>
 
       {/* Catalog listing */}
-      {loading ? (
+      {authLoading || loading ? (
         <div className="flex items-center gap-2 text-sm text-gray-500 py-12">
           <RefreshCcw className="animate-spin text-brand-primary" size={20} /> Querying database catalog...
         </div>

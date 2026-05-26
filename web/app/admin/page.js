@@ -14,7 +14,7 @@ import { API_BASE } from '../config';
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const { user } = useApp();
+  const { user, loading: authLoading } = useApp();
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [analytics, setAnalytics] = useState(null);
@@ -57,6 +57,7 @@ export default function AdminDashboard() {
   });
 
   const checkAdminAndFetch = async () => {
+    if (authLoading) return;
     if (!user || user.role !== 'admin') {
       router.push('/profile');
       return;
@@ -112,20 +113,25 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    checkAdminAndFetch();
+    if (!authLoading) {
+      checkAdminAndFetch();
+    }
     
     // Load Homepage Settings from localStorage
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('mradhul_homepage_sections');
       if (stored) {
         try {
-          setSectionSettings(JSON.parse(stored));
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            setSectionSettings(prev => ({ ...prev, ...parsed }));
+          }
         } catch (e) {
           console.warn('Failed parsing sections settings.');
         }
       }
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   // Auth/User updates
   const handleToggleRole = async (targetUserId, currentRole) => {
@@ -405,7 +411,7 @@ export default function AdminDashboard() {
     setSuccessMsg('Homepage section configuration updated live.');
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="flex flex-col items-center justify-center py-40 gap-4 bg-[#FAF7F2] min-h-screen">
         <RefreshCcw className="animate-spin text-brand-primary" size={32} />
@@ -1120,17 +1126,19 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {coupons.map((coupon) => {
-                        const isExpired = new Date(coupon.expiryDate) < new Date();
+                        const expiryDate = coupon.expiryDate ? new Date(coupon.expiryDate) : null;
+                        const isValidDate = expiryDate && !isNaN(expiryDate.getTime());
+                        const isExpired = isValidDate ? expiryDate < new Date() : false;
                         return (
                           <tr key={coupon._id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                             <td className="py-3 font-mono font-bold text-gray-800 tracking-wider text-xs uppercase">{coupon.code}</td>
                             <td className="py-3 font-semibold text-brand-primary text-xs">{coupon.discountPercentage}% Off</td>
                             <td className="py-3 text-gray-500 text-xs">
-                              {new Date(coupon.expiryDate).toLocaleDateString('en-IN', {
+                              {isValidDate ? expiryDate.toLocaleDateString('en-IN', {
                                 day: 'numeric',
                                 month: 'short',
                                 year: 'numeric'
-                              })}
+                              }) : 'No Expiry'}
                             </td>
                             <td className="py-3 text-xs">
                               {isExpired ? (

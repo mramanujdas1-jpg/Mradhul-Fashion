@@ -10,7 +10,7 @@ import { API_BASE } from '../../config';
 
 export default function AdminOrdersPage() {
   const router = useRouter();
-  const { user } = useApp();
+  const { user, loading: authLoading } = useApp();
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +23,7 @@ export default function AdminOrdersPage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   const fetchAllOrders = async () => {
+    if (authLoading) return;
     if (!user || user.role !== 'admin') {
       router.push('/profile');
       return;
@@ -46,8 +47,10 @@ export default function AdminOrdersPage() {
   };
 
   useEffect(() => {
-    fetchAllOrders();
-  }, [user]);
+    if (!authLoading) {
+      fetchAllOrders();
+    }
+  }, [user, authLoading]);
 
   const handleUpdateStatus = async (orderId) => {
     setActionLoading(true);
@@ -96,7 +99,7 @@ export default function AdminOrdersPage() {
       </div>
 
       {/* Orders grids */}
-      {loading ? (
+      {authLoading || loading ? (
         <div className="flex items-center gap-2 text-sm text-gray-500 py-12">
           <RefreshCcw className="animate-spin text-brand-primary" size={20} /> Querying order databases...
         </div>
@@ -222,7 +225,7 @@ export default function AdminOrdersPage() {
                               <span className="font-bold text-brand-primary min-w-[5rem] uppercase">{step.status}</span>
                               <div className="flex-grow">
                                 <p className="font-light text-gray-600 dark:text-gray-300">{step.description}</p>
-                                <span className="text-[8px] text-gray-400 font-light block mt-0.5">{new Date(step.timestamp).toLocaleString()}</span>
+                                <span className="text-[8px] text-gray-400 font-light block mt-0.5">{step.timestamp ? new Date(step.timestamp).toLocaleString() : 'N/A'}</span>
                               </div>
                             </div>
                           ))}
