@@ -32,6 +32,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [orderPlacedSuccess, setOrderPlacedSuccess] = useState(false);
   const [placedOrderInfo, setPlacedOrderInfo] = useState(null);
+  const [pendingOrderDetails, setPendingOrderDetails] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Address creation form states
@@ -184,18 +185,28 @@ export default function CheckoutPage() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/orders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
-        },
-        body: JSON.stringify(orderPayload)
-      });
+      let data = pendingOrderDetails;
+      
+      if (!data) {
+        const res = await fetch(`${API_BASE}/orders`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
+          },
+          body: JSON.stringify(orderPayload)
+        });
 
-      const data = await res.json();
-      if (res.ok) {
-        // If razorpay, trigger the actual SDK checkout dialog
+        data = await res.json();
+        if (!res.ok) {
+          setErrorMsg(data.message || 'Failed to place order.');
+          setLoading(false);
+          return;
+        }
+        setPendingOrderDetails(data);
+      }
+
+      // If razorpay, trigger the actual SDK checkout dialog
         if (paymentMethod === 'Razorpay') {
           const loaded = await loadRazorpayScript();
           if (!loaded) {
@@ -272,13 +283,10 @@ export default function CheckoutPage() {
           // COD placement
           setPlacedOrderInfo(data);
           setOrderPlacedSuccess(true);
+          setPendingOrderDetails(null);
           clearCart();
           setLoading(false);
         }
-      } else {
-        setErrorMsg(data.message || 'Failed to place order.');
-        setLoading(false);
-      }
     } catch (err) {
       setErrorMsg('Unable to place this order right now. Please try again in a moment.');
       setLoading(false);

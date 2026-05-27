@@ -46,6 +46,19 @@ router.post('/', protect, async (req, res) => {
       }
     }
 
+    if (paymentMethod === 'Razorpay') {
+      const existingPendingOrder = await Order.findOne({
+        user: req.user._id,
+        status: 'Pending',
+        paymentMethod: 'Razorpay',
+        totalPrice: totalPrice
+      }).sort({ createdAt: -1 });
+
+      if (existingPendingOrder && existingPendingOrder.orderItems.length === orderItems.length) {
+        return res.status(201).json(existingPendingOrder);
+      }
+    }
+
     const order = new Order({
       user: req.user._id,
       orderItems,
@@ -80,11 +93,13 @@ router.post('/', protect, async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // Decrement stock levels
-    for (const item of orderItems) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: -item.qty }
-      });
+    // Decrement stock levels only if COD. For Razorpay, deduct on payment confirmation.
+    if (paymentMethod === 'COD') {
+      for (const item of orderItems) {
+        await Product.findByIdAndUpdate(item.product, {
+          $inc: { stock: -item.qty }
+        });
+      }
     }
 
     res.status(201).json(createdOrder);
@@ -96,12 +111,6 @@ router.post('/', protect, async (req, res) => {
 // Update Order Payment to Paid
 router.put('/:id/pay', protect, async (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-
-  try {
-    const order = await Order.findById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
-    }
 
     // Cryptographic signature check
     if (process.env.RAZORPAY_KEY_SECRET) {
@@ -122,22 +131,45 @@ router.put('/:id/pay', protect, async (req, res) => {
       return res.status(503).json({ message: 'Razorpay signature verification is not configured.' });
     }
 
-    order.isPaid = true;
-    order.paidAt = Date.now();
-    order.status = 'Processing';
-    order.paymentResult = {
-      id: razorpay_payment_id,
-      status: 'Paid',
-      update_time: Date.now().toString(),
-      email_address: req.user.email
-    };
+    // Atomic update to prevent race conditions
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: req.params.id, isPaid: false },
+      {
+        $set: {
+          isPaid: true,
+          paidAt: Date.now(),
+          status: 'Processing',
+          paymentResult: {
+            id: razorpay_payment_id,
+            status: 'Paid',
+            update_time: Date.now().toString(),
+            email_address: req.user.email
+          }
+        },
+        $push: {
+          trackingSteps: {
+            status: 'Processing',
+            description: 'Payment verified. Order is being packed in our warehouse.'
+          }
+        }
+      },
+      { new: true }
+    );
 
-    order.trackingSteps.push({
-      status: 'Processing',
-      description: 'Payment verified. Order is being packed in our warehouse.'
-    });
+    if (!updatedOrder) {
+      const checkOrder = await Order.findById(req.params.id);
+      if (checkOrder && checkOrder.isPaid) {
+        return res.status(400).json({ message: 'Order is already paid.' });
+      }
+      return res.status(404).json({ message: 'Order not found' });
+    }
 
-    const updatedOrder = await order.save();
+    // Decrement stock levels since payment is confirmed
+    for (const item of updatedOrder.orderItems) {
+      await Product.findByIdAndUpdate(item.product, {
+        $inc: { stock: -item.qty }
+      });
+    }
 
     await updatedOrder.populate('user');
     notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});

@@ -44,30 +44,44 @@ router.post('/razorpay', async (req, res) => {
       }
 
       if (rzpOrderId) {
-        // Find the order that has this razorpay order ID
-        const order = await Order.findOne({ 'paymentResult.id': rzpOrderId });
-        
-        if (order && !order.isPaid) {
-          order.isPaid = true;
-          order.paidAt = Date.now();
-          order.status = 'Processing';
-          
-          if (event === 'payment.captured') {
-            order.paymentResult = {
-              id: payload.payment.entity.id,
-              status: 'Paid',
-              update_time: Date.now().toString(),
-              email_address: payload.payment.entity.email || ''
-            };
+        const updatePayload = {
+          isPaid: true,
+          paidAt: Date.now(),
+          status: 'Processing',
+          $push: {
+            trackingSteps: {
+              status: 'Processing',
+              description: 'Payment successfully captured via webhook. Order is being processed.'
+            }
           }
+        };
 
-          order.trackingSteps.push({
-            status: 'Processing',
-            description: 'Payment successfully captured via webhook. Order is being processed.'
-          });
+        if (event === 'payment.captured') {
+          updatePayload.$set = updatePayload.$set || {};
+          updatePayload.$set.paymentResult = {
+            id: payload.payment.entity.id,
+            status: 'Paid',
+            update_time: Date.now().toString(),
+            email_address: payload.payment.entity.email || ''
+          };
+        }
 
-          await order.save();
-          console.log(`Order ${order._id} marked as paid via webhook.`);
+        const updatedOrder = await Order.findOneAndUpdate(
+          { 'paymentResult.id': rzpOrderId, isPaid: false },
+          updatePayload,
+          { new: true }
+        );
+
+        if (updatedOrder) {
+          // Decrement stock levels since payment is confirmed via webhook
+          for (const item of updatedOrder.orderItems) {
+            await require('../models').Product.findByIdAndUpdate(item.product, {
+              $inc: { stock: -item.qty }
+            });
+          }
+          console.log(`Order ${updatedOrder._id} marked as paid via webhook.`);
+        } else {
+          console.log(`Order for rzp_id ${rzpOrderId} not found or already paid.`);
         }
       }
     } else if (event === 'payment.failed') {
