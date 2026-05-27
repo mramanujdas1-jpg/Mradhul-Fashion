@@ -32,7 +32,7 @@ function ProfilePageContent() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '';
 
-  const { user, logout, loading, authSyncError } = useApp();
+  const { user, logout, loading, authSyncError, syncFirebaseUser } = useApp();
 
   // Navigation tabs for logged in users
   const [profileTab, setProfileTab] = useState('orders');
@@ -313,6 +313,7 @@ function ProfilePageContent() {
       const result = await signInWithGoogle();
       // signInWithRedirect returns undefined (redirects the page), so only handle popup results
       if (result) {
+        await syncFirebaseUser(result.user);
         if (redirect === 'checkout') {
           router.push('/checkout');
         }

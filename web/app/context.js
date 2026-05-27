@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { API_BASE } from './config';
 import { onAuthStateChange, logOut, processRedirectResult } from './firebase';
 
@@ -26,6 +26,72 @@ export function AppProvider({ children }) {
   const [authSyncError, setAuthSyncError] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
 
+  const syncFirebaseUser = useCallback(async (firebaseUser) => {
+    if (!firebaseUser) return null;
+
+    setLoading(true);
+    setAuthSyncError('');
+
+    try {
+      const token = await firebaseUser.getIdToken();
+      localStorage.setItem('mf_auth_token', token);
+
+      const guestCart = readJsonFromStorage('mf_cart', []);
+      const guestWishlist = readJsonFromStorage('mf_wishlist', []);
+
+      const response = await fetch(`${API_BASE}/auth/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          cart: guestCart,
+          wishlist: guestWishlist
+        })
+      });
+
+      if (response.ok) {
+        const syncedUser = await response.json();
+        setUser(syncedUser);
+        localStorage.setItem('mf_user', JSON.stringify(syncedUser));
+        setCart(syncedUser.cart || []);
+        setWishlist(syncedUser.wishlist || []);
+        localStorage.setItem('mf_cart', JSON.stringify(syncedUser.cart || []));
+        localStorage.setItem('mf_wishlist', JSON.stringify(syncedUser.wishlist || []));
+        return syncedUser;
+      }
+
+      const fallbackUser = {
+        firebaseUid: firebaseUser.uid,
+        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Mradhul Customer',
+        email: firebaseUser.email || '',
+        role: 'customer',
+        token,
+        syncPending: true
+      };
+      setUser(fallbackUser);
+      setAuthSyncError('Signed in with Firebase, but the backend profile sync is currently unavailable.');
+      return fallbackUser;
+    } catch {
+      const token = await firebaseUser.getIdToken().catch(() => '');
+      const fallbackUser = {
+        firebaseUid: firebaseUser.uid,
+        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Mradhul Customer',
+        email: firebaseUser.email || '',
+        role: 'customer',
+        token,
+        syncPending: true
+      };
+      if (token) localStorage.setItem('mf_auth_token', token);
+      setUser(fallbackUser);
+      setAuthSyncError('Signed in with Firebase, but the backend profile sync is currently unavailable.');
+      return fallbackUser;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Set up Firebase auth observer & local storage hydration
   useEffect(() => {
     // 1. Initial local storage hydration for fast offline load
@@ -46,71 +112,21 @@ export function AppProvider({ children }) {
     }
 
     // 1.5 Process potential Firebase redirect result (only relevant after signInWithRedirect)
-    processRedirectResult().catch(err => {
-      // Only alert if a real auth error occurred (not just "no redirect pending")
-      if (err?.code && err.code !== 'auth/null-user') setAuthSyncError(err.message);
-    });
+    processRedirectResult()
+      .then(result => {
+        if (result?.user) return syncFirebaseUser(result.user);
+        return null;
+      })
+      .catch(err => {
+        if (err?.code && err.code !== 'auth/null-user') setAuthSyncError(err.message);
+      });
 
     // 2. Firebase Authentication Observer
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       setLoading(true);
       setAuthSyncError('');
       if (firebaseUser) {
-        try {
-          const token = await firebaseUser.getIdToken();
-          localStorage.setItem('mf_auth_token', token);
-
-          // Retrieve any offline guest cart/wishlist to merge
-          const guestCart = readJsonFromStorage('mf_cart', []);
-          const guestWishlist = readJsonFromStorage('mf_wishlist', []);
-
-          // Sync profiles and merge items on Express API
-          const response = await fetch(`${API_BASE}/auth/sync`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              cart: guestCart,
-              wishlist: guestWishlist
-            })
-          });
-
-          if (response.ok) {
-            const syncedUser = await response.json();
-            setUser(syncedUser);
-            localStorage.setItem('mf_user', JSON.stringify(syncedUser));
-
-            // Sync context state with merged database data
-            setCart(syncedUser.cart || []);
-            setWishlist(syncedUser.wishlist || []);
-            localStorage.setItem('mf_cart', JSON.stringify(syncedUser.cart || []));
-            localStorage.setItem('mf_wishlist', JSON.stringify(syncedUser.wishlist || []));
-          } else {
-            const fallbackUser = {
-              firebaseUid: firebaseUser.uid,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Mradhul Customer',
-              email: firebaseUser.email || '',
-              role: 'customer',
-              token,
-              syncPending: true
-            };
-            setUser(fallbackUser);
-            setAuthSyncError('Signed in with Firebase, but the backend profile sync is currently unavailable.');
-          }
-        } catch (err) {
-          const token = await firebaseUser.getIdToken().catch(() => '');
-          setUser({
-            firebaseUid: firebaseUser.uid,
-            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Mradhul Customer',
-            email: firebaseUser.email || '',
-            role: 'customer',
-            token,
-            syncPending: true
-          });
-          setAuthSyncError('Signed in with Firebase, but the backend profile sync is currently unavailable.');
-        }
+        await syncFirebaseUser(firebaseUser);
       } else {
         // Clear authenticated session details on sign out
         setUser(null);
@@ -127,7 +143,7 @@ export function AppProvider({ children }) {
     }
 
     return () => unsubscribe();
-  }, []);
+  }, [syncFirebaseUser]);
 
   // Update theme settings
   const toggleTheme = () => {
@@ -274,6 +290,7 @@ export function AppProvider({ children }) {
         theme,
         loading,
         authSyncError,
+        syncFirebaseUser,
         logout,
         toggleTheme,
         addToCart,
