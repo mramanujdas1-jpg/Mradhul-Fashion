@@ -112,6 +112,7 @@ router.post('/', protect, async (req, res) => {
 router.put('/:id/pay', protect, async (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
+  try {
     // Cryptographic signature check
     if (process.env.RAZORPAY_KEY_SECRET) {
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
