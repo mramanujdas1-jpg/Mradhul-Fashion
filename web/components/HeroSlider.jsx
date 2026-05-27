@@ -6,10 +6,35 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE } from '../app/config';
 
-// No hardcoded arrays. Banners are fetched from the database.
+const FALLBACK_SLIDES = [
+  {
+    image: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=1600',
+    title: 'The Royal Jaipur Collection',
+    subtitle: 'THE MAHARANI FESTIVE EDITIONS',
+    description: 'Experience pure royalty with handcrafted block print cottons, georgettes, and raw silk silhouettes decorated with exquisite Gota Patti borders.',
+    link: '/products',
+    align: 'left'
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1593030103066-0093718efeb9?w=1600',
+    title: 'Heritage Bridal Couture',
+    subtitle: 'MAHARANI WEDDING COUTURE',
+    description: 'Breathtaking lehengas and sarees meticulously detailed with hand-worked gold zardozi, meenakari beads, and luxury Rajasthani embroideries.',
+    link: '/products?category=Designer%20Lehengas',
+    align: 'right'
+  },
+  {
+    image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=1600',
+    title: 'Jaipur Fusion Elegance',
+    subtitle: 'DAILY LUXURY SILHOUETTES',
+    description: 'Graceful lightweight cotton sets, Chanderi Anarkalis, and premium ethnic-modern fusion wear tailored by local artisans.',
+    link: '/products',
+    align: 'left'
+  }
+];
 
 export default function HeroSlider() {
-  const [slidesList, setSlidesList] = useState([]);
+  const [slidesList, setSlidesList] = useState(FALLBACK_SLIDES);
   const [current, setCurrent] = useState(0);
 
   const nextSlide = () => {
@@ -51,19 +76,6 @@ export default function HeroSlider() {
     const timer = setInterval(nextSlide, 7000);
     return () => clearInterval(timer);
   }, [slidesList]);
-
-  if (!slidesList || slidesList.length === 0) {
-    return (
-      <div className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden bg-[#FAF7F2] flex items-center justify-center border-b border-gray-200">
-        <div className="text-center">
-          <span className="text-[10px] font-bold tracking-[0.25em] text-brand-gold uppercase block mb-3">
-            Loading Collections
-          </span>
-          <div className="w-16 h-16 rounded-full border-4 border-brand-primary border-t-transparent animate-spin mx-auto mb-4"></div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="relative h-[60vh] md:h-[80vh] w-full overflow-hidden bg-brand-obsidian">

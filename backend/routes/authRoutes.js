@@ -222,4 +222,34 @@ router.delete('/addresses/:id', protect, async (req, res) => {
   }
 });
 
+// Register Seller Onboarding
+router.post('/register-seller', protect, async (req, res) => {
+  const { storeName, storeDescription, phone, gstin, address } = req.body;
+  if (!storeName || !phone || !gstin) {
+    return res.status(400).json({ message: 'Store Name, Phone, and GSTIN are required' });
+  }
+
+  try {
+    const user = await require('../models').User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    user.role = 'seller';
+    user.sellerStatus = 'pending';
+    user.sellerInfo = {
+      storeName,
+      storeDescription: storeDescription || '',
+      phone,
+      gstin,
+      address: address || ''
+    };
+
+    await user.save();
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

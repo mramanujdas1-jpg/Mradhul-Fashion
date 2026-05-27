@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Order, Product } = require('../models');
-const { protect, admin } = require('../auth');
+const { protect, admin, seller } = require('../auth');
 const { notifyOrderStatusChange } = require('../services/notificationService');
 const Razorpay = require('razorpay');
 
@@ -17,7 +17,7 @@ try {
   console.error('Razorpay SDK initialization failed:', error.message);
 }
 
-// Create New Order
+// Create New Order (Split checkout items by sellerId)
 router.post('/', protect, async (req, res) => {
   const {
     orderItems,
@@ -34,6 +34,8 @@ router.post('/', protect, async (req, res) => {
   }
 
   try {
+    const sellerGroups = {};
+
     for (const item of orderItems) {
       const product = await Product.findById(item.product);
       if (!product) {
@@ -44,8 +46,29 @@ router.post('/', protect, async (req, res) => {
           message: `${product.name} has only ${product.stock} item${product.stock === 1 ? '' : 's'} available.`
         });
       }
+
+      const sellerId = product.seller.toString();
+      if (!sellerGroups[sellerId]) {
+        sellerGroups[sellerId] = [];
+      }
+
+      sellerGroups[sellerId].push({
+        product: item.product,
+        name: product.name,
+        qty: item.qty,
+        image: product.images[0] || item.image || '/logo.png',
+        price: item.price,
+        size: item.size
+      });
     }
 
+    const sellerIds = Object.keys(sellerGroups);
+    if (sellerIds.length === 0) {
+      return res.status(400).json({ message: 'No items in order' });
+    }
+
+    // Generate Razorpay order if prepaid
+    let rzpOrder = null;
     if (paymentMethod === 'Razorpay') {
       const existingPendingOrder = await Order.findOne({
         user: req.user._id,
@@ -57,58 +80,76 @@ router.post('/', protect, async (req, res) => {
       if (existingPendingOrder && existingPendingOrder.orderItems.length === orderItems.length) {
         return res.status(201).json(existingPendingOrder);
       }
-    }
 
-    const order = new Order({
-      user: req.user._id,
-      orderItems,
-      shippingAddress,
-      paymentMethod,
-      itemsPrice,
-      taxPrice,
-      shippingPrice,
-      totalPrice,
-      trackingSteps: [
-        { status: 'Pending', description: 'Your order has been received and is waiting processing.' }
-      ]
-    });
-
-    // Handle Razorpay payment setup
-    if (paymentMethod === 'Razorpay') {
       if (razorpayInstance) {
         const options = {
           amount: Math.round(totalPrice * 100), // in paise
           currency: 'INR',
           receipt: `receipt_order_${Date.now()}`
         };
-        const rzpOrder = await razorpayInstance.orders.create(options);
-        order.paymentResult = {
-          id: rzpOrder.id,
-          status: 'Created'
-        };
+        rzpOrder = await razorpayInstance.orders.create(options);
       } else {
         return res.status(503).json({ message: 'Razorpay is not configured for prepaid checkout.' });
       }
     }
 
-    const createdOrder = await order.save();
+    // Create split orders for each seller
+    const createdOrders = [];
+    const totalItemsPrice = orderItems.reduce((acc, item) => acc + (item.qty * item.price), 0);
 
-    // Decrement stock levels only if COD. For Razorpay, deduct on payment confirmation.
-    if (paymentMethod === 'COD') {
-      for (const item of orderItems) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: -item.qty }
-        });
+    for (const sellerId of sellerIds) {
+      const groupItems = sellerGroups[sellerId];
+      const groupItemsPrice = groupItems.reduce((acc, item) => acc + (item.qty * item.price), 0);
+      
+      // Proportional distribution of tax and shipping
+      const proportion = totalItemsPrice > 0 ? (groupItemsPrice / totalItemsPrice) : (1 / sellerIds.length);
+      const groupTaxPrice = Math.round(taxPrice * proportion * 100) / 100;
+      const groupShippingPrice = Math.round(shippingPrice * proportion * 100) / 100;
+      const groupTotalPrice = Math.round((groupItemsPrice + groupTaxPrice + groupShippingPrice) * 100) / 100;
+
+      const order = new Order({
+        user: req.user._id,
+        seller: sellerId,
+        orderItems: groupItems,
+        shippingAddress,
+        paymentMethod,
+        itemsPrice: groupItemsPrice,
+        taxPrice: groupTaxPrice,
+        shippingPrice: groupShippingPrice,
+        totalPrice: groupTotalPrice,
+        trackingSteps: [
+          { status: 'Pending', description: 'Your order has been received and is waiting processing.' }
+        ]
+      });
+
+      if (paymentMethod === 'Razorpay' && rzpOrder) {
+        order.paymentResult = {
+          id: rzpOrder.id,
+          status: 'Created'
+        };
+      }
+
+      const savedOrder = await order.save();
+      createdOrders.push(savedOrder);
+
+      // Decrement stock levels immediately only if COD. For Razorpay, deduct on payment confirmation.
+      if (paymentMethod === 'COD') {
+        for (const item of groupItems) {
+          await Product.findByIdAndUpdate(item.product, {
+            $inc: { stock: -item.qty }
+          });
+        }
       }
     }
 
-    res.status(201).json(createdOrder);
+    // Return the first created order to preserve perfect frontend compatibility
+    res.status(201).json(createdOrders[0]);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-// Update Order Payment to Paid
+// Update Order Payment to Paid (Fulfill all prepaid sibling orders sharing identical rzpOrderId)
 router.put('/:id/pay', protect, async (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
@@ -132,50 +173,49 @@ router.put('/:id/pay', protect, async (req, res) => {
       return res.status(503).json({ message: 'Razorpay signature verification is not configured.' });
     }
 
-    // Atomic update to prevent race conditions
-    const updatedOrder = await Order.findOneAndUpdate(
-      { _id: req.params.id, isPaid: false },
-      {
-        $set: {
-          isPaid: true,
-          paidAt: Date.now(),
-          status: 'Processing',
-          paymentResult: {
-            id: razorpay_payment_id,
-            status: 'Paid',
-            update_time: Date.now().toString(),
-            email_address: req.user.email
-          }
-        },
-        $push: {
-          trackingSteps: {
-            status: 'Processing',
-            description: 'Payment verified. Order is being packed in our warehouse.'
-          }
-        }
-      },
-      { new: true }
-    );
-
-    if (!updatedOrder) {
-      const checkOrder = await Order.findById(req.params.id);
-      if (checkOrder && checkOrder.isPaid) {
-        return res.status(400).json({ message: 'Order is already paid.' });
-      }
+    const primaryOrder = await Order.findById(req.params.id);
+    if (!primaryOrder) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    // Decrement stock levels since payment is confirmed
-    for (const item of updatedOrder.orderItems) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: -item.qty }
-      });
+    const rzpOrderId = primaryOrder.paymentResult?.id;
+    if (!rzpOrderId) {
+      return res.status(400).json({ message: 'Order is not configured for Razorpay.' });
     }
 
-    await updatedOrder.populate('user');
-    notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});
+    // Perform atomic updates across all sibling orders sharing identical rzpOrderId
+    const siblingOrders = await Order.find({ 'paymentResult.id': rzpOrderId, isPaid: false });
 
-    res.json(updatedOrder);
+    for (const order of siblingOrders) {
+      order.isPaid = true;
+      order.paidAt = Date.now();
+      order.status = 'Processing';
+      order.paymentResult = {
+        id: razorpay_payment_id,
+        status: 'Paid',
+        update_time: Date.now().toString(),
+        email_address: req.user.email
+      };
+      order.trackingSteps.push({
+        status: 'Processing',
+        description: 'Payment verified. Order is being processed.'
+      });
+      await order.save();
+
+      // Decrement stock levels
+      for (const item of order.orderItems) {
+        await Product.findByIdAndUpdate(item.product, {
+          $inc: { stock: -item.qty }
+        });
+      }
+
+      await order.populate('user');
+      notifyOrderStatusChange(order.user, order._id, order.status).catch(() => {});
+    }
+
+    // Return the updated primary order to client
+    const updatedPrimaryOrder = await Order.findById(req.params.id);
+    res.json(updatedPrimaryOrder);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -192,10 +232,27 @@ router.get('/myorders', protect, async (req, res) => {
 });
 
 // Get Order By ID
+// Seller/Admin: Get All Orders (Filtered by ownership)
+router.get('/seller/mine', protect, async (req, res) => {
+  try {
+    const query = req.user.role === 'admin' ? {} : { seller: req.user._id };
+    const orders = await Order.find(query)
+      .populate('user', 'id name email')
+      .sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 router.get('/:id', protect, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id).populate('user', 'name email');
     if (order) {
+      // Verify ownership for sellers
+      if (req.user.role === 'seller' && order.seller.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized: this order belongs to another store.' });
+      }
       res.json(order);
     } else {
       res.status(404).json({ message: 'Order not found' });
@@ -215,17 +272,21 @@ router.get('/', protect, admin, async (req, res) => {
   }
 });
 
-// Admin: Update Order Status & Add Tracking Step
-router.put('/:id/status', protect, admin, async (req, res) => {
+// Seller/Admin: Update Order Status & Add Tracking Step
+router.put('/:id/status', protect, async (req, res) => {
   const { status, description } = req.body;
   try {
     const order = await Order.findById(req.params.id);
     if (order) {
+      // Enforce seller/admin isolation
+      if (req.user.role !== 'admin' && order.seller.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized to modify this order.' });
+      }
+
       order.status = status;
       if (status === 'Delivered') {
         order.isDelivered = true;
         order.deliveredAt = Date.now();
-        // If COD, mark as paid upon delivery
         if (order.paymentMethod === 'COD') {
           order.isPaid = true;
           order.paidAt = Date.now();
@@ -239,7 +300,6 @@ router.put('/:id/status', protect, admin, async (req, res) => {
 
       const updatedOrder = await order.save();
       
-      // Notify user asynchronously
       await updatedOrder.populate('user');
       notifyOrderStatusChange(updatedOrder.user, updatedOrder._id, updatedOrder.status).catch(() => {});
 

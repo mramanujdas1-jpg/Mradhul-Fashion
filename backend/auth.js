@@ -114,4 +114,23 @@ const adminCheck = (req, res, next) => {
   }
 };
 
-module.exports = { protect, admin: adminCheck };
+const sellerCheck = (req, res, next) => {
+  if (req.user && (req.user.role === 'seller' || req.user.role === 'admin')) {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized as a seller' });
+  }
+};
+
+const approvedSellerCheck = (req, res, next) => {
+  if (req.user && req.user.role === 'admin') {
+    return next();
+  }
+  if (req.user && req.user.role === 'seller' && req.user.sellerStatus === 'approved') {
+    next();
+  } else {
+    res.status(403).json({ message: 'Not authorized: seller account is not approved yet' });
+  }
+};
+
+module.exports = { protect, admin: adminCheck, seller: sellerCheck, approvedSeller: approvedSellerCheck };

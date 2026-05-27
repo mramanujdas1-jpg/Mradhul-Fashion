@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { 
   ShieldCheck, ShieldAlert, Users, PackageOpen, ClipboardList, Wallet, RefreshCcw, 
   UserPlus, Trash, Image as ImageIcon, LayoutGrid, Settings, Plus, Eye, EyeOff, Save,
-  Ticket
+  Ticket, Store
 } from 'lucide-react';
 
 import { API_BASE } from '../config';
@@ -21,6 +21,7 @@ export default function AdminDashboard() {
   const [usersList, setUsersList] = useState([]);
   const [banners, setBanners] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [sellersList, setSellersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -105,6 +106,15 @@ export default function AdminDashboard() {
         setCoupons(couponsData);
       }
 
+      // Fetch Sellers
+      const sellersRes = await fetch(`${API_BASE}/admin/sellers`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}` }
+      });
+      if (sellersRes.ok) {
+        const sellersData = await sellersRes.json();
+        setSellersList(sellersData);
+      }
+
     } catch (err) {
       setErrorMsg('Unable to load admin data. Check API availability and your admin session.');
     } finally {
@@ -134,6 +144,33 @@ export default function AdminDashboard() {
   }, [user, authLoading]);
 
   // Auth/User updates
+  const handleUpdateSellerStatus = async (sellerId, nextStatus) => {
+    setActionLoading(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/sellers/${sellerId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
+        },
+        body: JSON.stringify({ status: nextStatus })
+      });
+      if (res.ok) {
+        setSuccessMsg(`Seller account status updated to ${nextStatus}.`);
+        checkAdminAndFetch();
+      } else {
+        const data = await res.json();
+        setErrorMsg(data.message || 'Failed to update seller status.');
+      }
+    } catch (err) {
+      setErrorMsg('Failed to process status update.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleToggleRole = async (targetUserId, currentRole) => {
     setActionLoading(true);
     const newRole = currentRole === 'admin' ? 'customer' : 'admin';
@@ -502,6 +539,15 @@ export default function AdminDashboard() {
           }`}
         >
           <Ticket size={16} /> Promo Coupons
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('sellers'); setErrorMsg(''); setSuccessMsg(''); }}
+          className={`pb-3 text-sm font-bold uppercase tracking-wider whitespace-nowrap transition-all border-b-2 flex items-center gap-2 ${
+            activeTab === 'sellers' ? 'text-brand-primary border-brand-primary' : 'text-gray-400 border-transparent hover:text-gray-600'
+          }`}
+        >
+          <Store size={16} /> Seller Approvals
         </button>
       </div>
 
@@ -1165,6 +1211,80 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: SELLER APPROVALS */}
+      {activeTab === 'sellers' && (
+        <div className="bg-white p-6 rounded-3xl border border-brand-gold/15 shadow-sm animate-slide-up">
+          <div className="mb-6">
+            <h4 className="font-serif text-xl font-bold text-brand-primary">Artisan Merchant Registrations</h4>
+            <p className="text-xs text-gray-500 mt-1">Review boutique profiles, contact phone numbers, GSTIN records, and process seller approvals.</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            {sellersList.length === 0 ? (
+              <p className="py-8 text-center text-sm font-light text-gray-500 italic">No boutique seller registrations found.</p>
+            ) : (
+              <table className="w-full text-left border-collapse text-xs md:text-sm">
+                <thead>
+                  <tr className="border-b border-black/10 text-gray-400 font-semibold uppercase tracking-wider font-serif">
+                    <th className="py-3 px-4">Boutique Name</th>
+                    <th className="py-3 px-4">GSTIN ID</th>
+                    <th className="py-3 px-4">Contact Phone</th>
+                    <th className="py-3 px-4">Registered Owner</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sellersList.map((sel) => (
+                    <tr key={sel._id} className="hover:bg-brand-cream/10 transition-colors">
+                      <td className="py-4 px-4">
+                        <p className="font-bold text-brand-primary text-sm">{sel.sellerInfo?.storeName || 'Custom Boutique'}</p>
+                        <p className="text-[10px] text-gray-500 line-clamp-1 mt-0.5">{sel.sellerInfo?.storeDescription || 'No description provided'}</p>
+                      </td>
+                      <td className="py-4 px-4 font-mono text-xs font-semibold">{sel.sellerInfo?.gstin || 'No GSTIN'}</td>
+                      <td className="py-4 px-4 font-semibold">{sel.sellerInfo?.phone || sel.email}</td>
+                      <td className="py-4 px-4">
+                        <p className="font-medium">{sel.name}</p>
+                        <p className="text-[10px] text-gray-400 font-mono">{sel.email}</p>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className={`inline-block px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider rounded-full border ${
+                          sel.sellerStatus === 'approved' 
+                            ? 'bg-green-50 text-green-700 border-green-200'
+                            : sel.sellerStatus === 'rejected'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {sel.sellerStatus || 'pending'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleUpdateSellerStatus(sel._id, 'approved')}
+                            disabled={actionLoading || sel.sellerStatus === 'approved'}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] uppercase tracking-wider px-3.5 py-2 rounded-full shadow disabled:opacity-40"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleUpdateSellerStatus(sel._id, 'rejected')}
+                            disabled={actionLoading || sel.sellerStatus === 'rejected'}
+                            className="border border-brand-primary text-brand-primary hover:bg-brand-primary/5 font-bold text-[10px] uppercase tracking-wider px-3.5 py-1.5 rounded-full disabled:opacity-40"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

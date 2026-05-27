@@ -125,4 +125,45 @@ router.delete('/users/:id', protect, admin, async (req, res) => {
   }
 });
 
+// Admin: Get All Sellers
+router.get('/sellers', protect, admin, async (req, res) => {
+  try {
+    const sellers = await User.find({ role: 'seller' }).select('-password');
+    res.json(sellers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Admin: Update Seller Approval Status
+router.put('/sellers/:id/status', protect, admin, async (req, res) => {
+  const { status } = req.body; // 'approved' | 'rejected' | 'pending'
+  try {
+    if (!['approved', 'rejected', 'pending'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be approved, rejected, or pending.' });
+    }
+    const user = await User.findById(req.params.id);
+    if (user) {
+      user.sellerStatus = status;
+      if (status === 'approved') {
+        user.role = 'seller';
+      } else if (status === 'rejected') {
+        user.role = 'customer';
+      }
+      await user.save();
+      res.json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        sellerStatus: user.sellerStatus
+      });
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

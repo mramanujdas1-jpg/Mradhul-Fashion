@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Product, Review } = require('../models');
-const { protect, admin } = require('../auth');
+const { protect, admin, approvedSeller } = require('../auth');
 
 // Get All Products (with advanced filter, search & sorting)
 router.get('/', async (req, res) => {
@@ -224,8 +224,19 @@ router.post('/reviews/:reviewId/helpful', protect, async (req, res) => {
   }
 });
 
-// Admin: Create Product
-router.post('/', protect, admin, async (req, res) => {
+// Seller/Admin: Get All Seller Products
+router.get('/seller/mine', protect, approvedSeller, async (req, res) => {
+  try {
+    const query = req.user.role === 'admin' ? {} : { seller: req.user._id };
+    const products = await Product.find(query).sort({ createdAt: -1 });
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Seller/Admin: Create Product
+router.post('/', protect, approvedSeller, async (req, res) => {
   try {
     const productData = req.body;
     
@@ -235,6 +246,9 @@ router.post('/', protect, admin, async (req, res) => {
     if (!productData.category) productData.category = 'General';
     if (!productData.brand) productData.brand = 'Mradhul';
     
+    // Enforce logged-in user as the product owner (seller)
+    productData.seller = req.user._id;
+
     // Ensure stockPerSize is correctly formatted as an object
     if (productData.stockPerSize && typeof productData.stockPerSize === 'object') {
       // It's already an object, mongoose Map handles it
@@ -250,14 +264,18 @@ router.post('/', protect, admin, async (req, res) => {
   }
 });
 
-// Admin: Update Product
-router.put('/:id', protect, admin, async (req, res) => {
+// Seller/Admin: Update Product
+router.put('/:id', protect, approvedSeller, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (product) {
+      // Enforce seller isolation
+      if (product.seller.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Not authorized: you can only update your own products' });
+      }
+
       const updateData = req.body;
       
-      // Update fields explicitly or spread (but spreading can be risky if unhandled, so we update key fields or iterate)
       const allowedFields = [
         'name', 'slug', 'shortDescription', 'description', 'price', 'discountPrice', 'category', 
         'subcategory', 'brand', 'tags', 'gender', 'fabricMaterial', 'material', 'careInstructions',
@@ -281,11 +299,49 @@ router.put('/:id', protect, admin, async (req, res) => {
   }
 });
 
-// Admin: Delete Product
-router.delete('/:id', protect, admin, async (req, res) => {
+// Seller/Admin: Delete Product
+router.delete('/:id', protect, approvedSeller, async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
     if (product) {
+      // Enforce seller isolation
+      if (product.seller.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Not authorized: you can only delete your own products' });
+      }
+
+      // Delete images from Cloudinary if configured and exist
+      if (product.images && product.images.length > 0 && process.env.CLOUDINARY_CLOUD_NAME) {
+        try {
+          const cloudinary = require('cloudinary').v2;
+          cloudinary.config({
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            api_key: process.env.CLOUDINARY_API_KEY,
+            api_secret: process.env.CLOUDINARY_API_SECRET
+          });
+
+          for (const imageUrl of product.images) {
+            if (imageUrl.includes('res.cloudinary.com')) {
+              try {
+                const parts = imageUrl.split('/');
+                const folderIndex = parts.indexOf('mradhul_fashion');
+                if (folderIndex > -1) {
+                  const subParts = parts.slice(folderIndex);
+                  const publicIdWithExt = subParts.join('/');
+                  const publicId = publicIdWithExt.substring(0, publicIdWithExt.lastIndexOf('.'));
+                  
+                  await cloudinary.uploader.destroy(publicId);
+                  console.log(`Successfully deleted Cloudinary image: ${publicId}`);
+                }
+              } catch (destroyErr) {
+                console.error(`Failed to delete Cloudinary image: ${imageUrl}`, destroyErr.message);
+              }
+            }
+          }
+        } catch (cloudinaryErr) {
+          console.error('Failed to configure or invoke Cloudinary uploader destruction:', cloudinaryErr.message);
+        }
+      }
+
       await Product.findByIdAndDelete(req.params.id);
       await Review.deleteMany({ product: req.params.id });
       res.json({ message: 'Product and associated reviews removed' });

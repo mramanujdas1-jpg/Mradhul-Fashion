@@ -17,7 +17,15 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String }, // Optional for OAuth/Firebase users
   firebaseUid: { type: String, unique: true, sparse: true },
-  role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  role: { type: String, enum: ['customer', 'seller', 'admin'], default: 'customer' },
+  sellerStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
+  sellerInfo: {
+    storeName: { type: String },
+    storeDescription: { type: String },
+    phone: { type: String },
+    gstin: { type: String },
+    address: { type: String }
+  },
   addresses: [addressSchema],
   wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
   cart: [{
@@ -36,6 +44,7 @@ const categorySchema = new mongoose.Schema({
 
 // Product Schema
 const productSchema = new mongoose.Schema({
+  seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   name: { type: String, required: true },
   slug: { type: String, unique: true, sparse: true },
   shortDescription: { type: String },
@@ -112,6 +121,7 @@ const trackingStepSchema = new mongoose.Schema({
 
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   orderItems: [{
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     name: { type: String, required: true },

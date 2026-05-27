@@ -91,6 +91,11 @@ export default function Navbar() {
             <ShieldAlert size={16} /> Admin Panel
           </Link>
         )}
+        {user?.role === 'seller' && (
+          <Link href="/seller" className="flex items-center gap-1 text-brand-gold hover:text-brand-primary transition-colors">
+            <ShoppingBag size={16} /> Seller Panel
+          </Link>
+        )}
       </div>
 
       {/* Actions (Search, Theme, Wishlist, Cart, Profile) */}
@@ -176,6 +181,11 @@ export default function Navbar() {
                       Admin Settings
                     </Link>
                   )}
+                  {user.role === 'seller' && (
+                    <Link href="/seller" className="block px-4 py-2 text-sm hover:bg-brand-primary/10 transition-colors text-brand-gold font-bold" onClick={() => setProfileDropdownOpen(false)}>
+                      Seller Dashboard
+                    </Link>
+                  )}
                   <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-brand-primary hover:bg-brand-primary/10 transition-colors font-semibold border-t border-black/5 dark:border-white/5 mt-1">
                     Sign Out
                   </button>
@@ -232,6 +242,11 @@ export default function Navbar() {
             {user?.role === 'admin' && (
               <Link href="/admin" className="text-base text-brand-gold hover:text-brand-primary transition-colors font-bold flex items-center gap-1 border-t border-brand-primary/10 pt-2" onClick={() => setMenuOpen(false)}>
                 <ShieldAlert size={16} /> Admin Dashboard
+              </Link>
+            )}
+            {user?.role === 'seller' && (
+              <Link href="/seller" className="text-base text-brand-gold hover:text-brand-primary transition-colors font-bold flex items-center gap-1 border-t border-brand-primary/10 pt-2" onClick={() => setMenuOpen(false)}>
+                <ShoppingBag size={16} /> Seller Dashboard
               </Link>
             )}
           </div>

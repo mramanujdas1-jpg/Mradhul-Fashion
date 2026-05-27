@@ -44,44 +44,46 @@ router.post('/razorpay', async (req, res) => {
       }
 
       if (rzpOrderId) {
-        const updatePayload = {
-          isPaid: true,
-          paidAt: Date.now(),
-          status: 'Processing',
-          $push: {
-            trackingSteps: {
+        // Find all unpaid orders matching this Razorpay order ID
+        const ordersToFulfill = await Order.find({ 'paymentResult.id': rzpOrderId, isPaid: false });
+
+        if (ordersToFulfill.length > 0) {
+          for (const order of ordersToFulfill) {
+            order.isPaid = true;
+            order.paidAt = Date.now();
+            order.status = 'Processing';
+            order.trackingSteps.push({
               status: 'Processing',
               description: 'Payment successfully captured via webhook. Order is being processed.'
-            }
-          }
-        };
-
-        if (event === 'payment.captured') {
-          updatePayload.$set = updatePayload.$set || {};
-          updatePayload.$set.paymentResult = {
-            id: payload.payment.entity.id,
-            status: 'Paid',
-            update_time: Date.now().toString(),
-            email_address: payload.payment.entity.email || ''
-          };
-        }
-
-        const updatedOrder = await Order.findOneAndUpdate(
-          { 'paymentResult.id': rzpOrderId, isPaid: false },
-          updatePayload,
-          { new: true }
-        );
-
-        if (updatedOrder) {
-          // Decrement stock levels since payment is confirmed via webhook
-          for (const item of updatedOrder.orderItems) {
-            await require('../models').Product.findByIdAndUpdate(item.product, {
-              $inc: { stock: -item.qty }
             });
+
+            if (event === 'payment.captured') {
+              order.paymentResult = {
+                id: payload.payment.entity.id,
+                status: 'Paid',
+                update_time: Date.now().toString(),
+                email_address: payload.payment.entity.email || ''
+              };
+            } else {
+              order.paymentResult = {
+                ...order.paymentResult,
+                status: 'Paid',
+                update_time: Date.now().toString()
+              };
+            }
+
+            await order.save();
+
+            // Decrement stock levels since payment is confirmed via webhook
+            for (const item of order.orderItems) {
+              await require('../models').Product.findByIdAndUpdate(item.product, {
+                $inc: { stock: -item.qty }
+              });
+            }
+            console.log(`Order ${order._id} marked as paid via webhook.`);
           }
-          console.log(`Order ${updatedOrder._id} marked as paid via webhook.`);
         } else {
-          console.log(`Order for rzp_id ${rzpOrderId} not found or already paid.`);
+          console.log(`No unpaid orders found for rzp_id ${rzpOrderId} or already paid.`);
         }
       }
     } else if (event === 'payment.failed') {

@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../context';
-import { User, LogIn, Mail, Lock, ShieldAlert, Package, MapPin, RefreshCcw, CheckCircle2, ChevronDown, ChevronUp, Phone, Check } from 'lucide-react';
+import { User, LogIn, Mail, Lock, ShieldAlert, Package, MapPin, RefreshCcw, CheckCircle2, ChevronDown, ChevronUp, Phone, Check, Store } from 'lucide-react';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, sendOTP, getAuthErrorMessage } from '../firebase';
 
 import { API_BASE } from '../config';
@@ -667,11 +667,110 @@ function ProfilePageContent() {
           >
             <MapPin size={16} /> Shipping Addresses
           </button>
+          {user.role === 'customer' && (
+            <button
+              onClick={() => setProfileTab('becomeseller')}
+              className={`text-left text-sm py-2 px-4 rounded-xl flex items-center gap-2 font-medium ${
+                profileTab === 'becomeseller' ? 'bg-brand-primary/10 text-brand-primary font-bold' : 'hover:bg-black/5 dark:hover:bg-white/5'
+              }`}
+            >
+              <Store size={16} /> Become a Seller
+            </button>
+          )}
         </div>
 
         {/* Tab content view */}
         <div className="md:col-span-3">
           
+          {/* Become a Seller Onboarding Form */}
+          {profileTab === 'becomeseller' && (
+            <div className="bg-white dark:bg-brand-charcoal p-6 md:p-8 rounded-2xl border border-brand-primary/10 shadow-sm space-y-6">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-brand-primary dark:text-white mb-1">Artisan Merchant Onboarding</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-light leading-relaxed">
+                  Join the Mradhul Fashion royal collective. Showcase and ship your handcrafted sarees, designer lehengas, and ethnic-modern collections directly to nationwide patrons.
+                </p>
+              </div>
+
+              {successMsg && <p className="text-xs font-semibold text-green-600 bg-green-50 p-3 rounded-xl border border-green-200">{successMsg}</p>}
+              {errorMsg && <p className="text-xs font-semibold text-brand-primary bg-red-50 p-3 rounded-xl border border-brand-primary/10">{errorMsg}</p>}
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                setActionLoading(true);
+                setErrorMsg('');
+                setSuccessMsg('');
+                
+                const storeName = e.target.storeName.value;
+                const storeDescription = e.target.storeDescription.value;
+                const phone = e.target.phone.value;
+                const gstin = e.target.gstin.value;
+                const address = e.target.address.value;
+
+                try {
+                  const res = await fetch(`${API_BASE}/auth/register-seller`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
+                    },
+                    body: JSON.stringify({ storeName, storeDescription, phone, gstin, address })
+                  });
+
+                  if (res.ok) {
+                    setSuccessMsg('Seller application submitted successfully! Onboarding status has been updated to pending.');
+                    const currentFirebaseUser = require('firebase/auth').getAuth().currentUser;
+                    if (currentFirebaseUser) {
+                      await syncFirebaseUser(currentFirebaseUser);
+                    }
+                  } else {
+                    const data = await res.json();
+                    setErrorMsg(data.message || 'Onboarding registration failed.');
+                  }
+                } catch (err) {
+                  setErrorMsg('Failed to process registration.');
+                } finally {
+                  setActionLoading(false);
+                }
+              }} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Store / Boutique Name *</label>
+                    <input type="text" name="storeName" required className="w-full bg-gray-50 dark:bg-brand-charcoal/20 border border-brand-gold/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800 dark:text-white" placeholder="e.g. Jaipur Heritage Handlooms" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Merchant Contact Phone *</label>
+                    <input type="tel" name="phone" required className="w-full bg-gray-50 dark:bg-brand-charcoal/20 border border-brand-gold/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800 dark:text-white" placeholder="e.g. +91 9876543210" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Boutique Story Description</label>
+                  <textarea name="storeDescription" rows={3} className="w-full bg-gray-50 dark:bg-brand-charcoal/20 border border-brand-gold/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800 dark:text-white" placeholder="Introduce your boutique's history, local karigars, or regional focus..." />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">GSTIN Number (15-Digit) *</label>
+                    <input type="text" name="gstin" required className="w-full bg-gray-50 dark:bg-brand-charcoal/20 border border-brand-gold/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800 dark:text-white font-mono" placeholder="e.g. 08AAAAA0000A1Z2" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Store Warehouse Address *</label>
+                    <input type="text" name="address" required className="w-full bg-gray-50 dark:bg-brand-charcoal/20 border border-brand-gold/15 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800 dark:text-white" placeholder="e.g. Johri Bazar, Old City, Jaipur" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="w-full py-3 bg-brand-primary disabled:bg-gray-200 text-white rounded-full font-bold text-xs uppercase tracking-widest block shadow hover:bg-brand-primaryDark transition-colors"
+                >
+                  {actionLoading ? 'Submitting Application...' : 'Register Boutique'}
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* Orders History list */}
           {profileTab === 'orders' && (
             <div className="flex flex-col gap-6">

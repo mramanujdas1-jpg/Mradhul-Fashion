@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE } from './config';
 import { onAuthStateChange, logOut, processRedirectResult } from './firebase';
 
@@ -26,8 +26,15 @@ export function AppProvider({ children }) {
   const [authSyncError, setAuthSyncError] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
 
+  const syncUidRef = useRef(null);
+
   const syncFirebaseUser = useCallback(async (firebaseUser) => {
     if (!firebaseUser) return null;
+
+    if (syncUidRef.current === firebaseUser.uid) {
+      return null;
+    }
+    syncUidRef.current = firebaseUser.uid;
 
     setLoading(true);
     setAuthSyncError('');
@@ -157,6 +164,7 @@ export function AppProvider({ children }) {
   const logout = async () => {
     try {
       await logOut();
+      syncUidRef.current = null;
       setUser(null);
       setCart([]);
       setWishlist([]);
