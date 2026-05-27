@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   initializeAuth,
+  getAuth,
   getReactNativePersistence,
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
@@ -27,18 +28,17 @@ if (getApps().length === 0) {
 
 let auth = null;
 try {
-  // Try to initialize auth with AsyncStorage persistence
   auth = initializeAuth(app, {
     persistence: getReactNativePersistence(AsyncStorage)
   });
 } catch (e) {
-  // If it's already initialized, just get it
-  import('firebase/auth').then(({ getAuth }) => {
-    auth = getAuth(app);
-  });
+  auth = getAuth(app);
 }
 
 export const getFirebaseAuth = () => {
+  if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+    throw new Error('Firebase mobile configuration is missing. Check EXPO_PUBLIC_FIREBASE_* env values.');
+  }
   return auth;
 };
 
@@ -66,7 +66,6 @@ export const onAuthStateChange = (callback) => {
     }
     return onAuthStateChanged(auth, callback);
   } catch (err) {
-    console.warn(err.message);
     callback(null);
     return () => {};
   }

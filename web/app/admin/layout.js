@@ -18,7 +18,7 @@ const navItems = [
 export default function AdminLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logOut } = useApp();
+  const { user, loading, logout } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -27,17 +27,17 @@ export default function AdminLayout({ children }) {
   }, []);
 
   useEffect(() => {
-    if (mounted && (!user || user.role !== 'admin')) {
+    if (mounted && !loading && (!user || user.role !== 'admin')) {
       router.push('/profile');
     }
-  }, [user, mounted, router]);
+  }, [user, loading, mounted, router]);
 
-  if (!mounted || !user || user.role !== 'admin') {
+  if (!mounted || loading || !user || user.role !== 'admin') {
     return null; // Return nothing while redirecting or loading
   }
 
   const handleLogout = async () => {
-    await logOut();
+    await logout();
     router.push('/profile');
   };
 
@@ -95,10 +95,10 @@ export default function AdminLayout({ children }) {
         <div className="p-4 border-t border-gray-200 dark:border-[#333] shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 mb-2">
             <div className="h-8 w-8 rounded-full bg-brand-primary/20 text-brand-primary flex items-center justify-center font-bold">
-              {user.name.charAt(0).toUpperCase()}
+              {(user.name || user.email || 'A').charAt(0).toUpperCase()}
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium line-clamp-1">{user.name}</span>
+              <span className="text-sm font-medium line-clamp-1">{user.name || user.email}</span>
               <span className="text-xs text-gray-500">Admin</span>
             </div>
           </div>

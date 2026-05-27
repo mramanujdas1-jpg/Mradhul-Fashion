@@ -2,7 +2,9 @@ const admin = require('firebase-admin');
 const { User } = require('./models');
 
 const logInfo = (...args) => {
-  console.log('[Auth]', ...args);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Auth]', ...args);
+  }
 };
 
 // Initialize Firebase Admin SDK if configuration exists
@@ -41,7 +43,7 @@ const protect = async (req, res, next) => {
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     try {
       token = req.headers.authorization.split(' ')[1];
-      logInfo(`Token received for ${req.method} ${req.originalUrl} (${token.substring(0, 20)}...)`);
+      logInfo(`Token received for ${req.method} ${req.originalUrl}`);
       
       if (!firebaseApp) {
         console.error('[Auth] CRITICAL: Firebase Admin SDK is not initialized — cannot verify tokens');

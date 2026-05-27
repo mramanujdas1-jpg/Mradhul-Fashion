@@ -5,16 +5,34 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '../context';
 import { User, LogIn, Mail, Lock, ShieldAlert, Package, MapPin, RefreshCcw, CheckCircle2, ChevronDown, ChevronUp, Phone, Check } from 'lucide-react';
-import { signInWithGoogle, signInWithEmail, signUpWithEmail, sendOTP, isMock, getAuthErrorMessage } from '../firebase';
+import { signInWithGoogle, signInWithEmail, signUpWithEmail, sendOTP, getAuthErrorMessage } from '../firebase';
 
 import { API_BASE } from '../config';
+
+const formatDate = (value, options) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-IN', options);
+};
+
+const estimateDeliveryDate = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'To be confirmed';
+  date.setDate(date.getDate() + 5);
+  return formatDate(date, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+};
 
 function ProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '';
 
-  const { user, logout } = useApp();
+  const { user, logout, loading, authSyncError } = useApp();
 
   // Navigation tabs for logged in users
   const [profileTab, setProfileTab] = useState('orders');
@@ -180,7 +198,7 @@ function ProfilePageContent() {
             <div class="invoice-title">Tax Invoice / Receipt</div>
             <div style="font-size: 12px; margin-top: 5px; text-align: right; color: #6C757D;">
               Invoice ID: <span style="font-family: monospace; font-weight: bold;">${order._id}</span><br/>
-              Order Date: ${new Date(order.createdAt).toLocaleDateString('en-IN')}
+              Order Date: ${formatDate(order.createdAt)}
             </div>
           </div>
         </div>
@@ -240,7 +258,7 @@ function ProfilePageContent() {
 
         <div style="margin-top: 40px; font-size: 11px; color: #8E8E93;">
           <strong>Payment Mode:</strong> ${order.paymentMethod} (${order.isPaid ? 'PAID' : 'PENDING PAYMENT'})<br/>
-          <strong>Paid At:</strong> ${order.paidAt ? new Date(order.paidAt).toLocaleDateString('en-IN') : 'N/A'}
+          <strong>Paid At:</strong> ${formatDate(order.paidAt)}
         </div>
 
         <div class="footer">
@@ -295,13 +313,11 @@ function ProfilePageContent() {
       const result = await signInWithGoogle();
       // signInWithRedirect returns undefined (redirects the page), so only handle popup results
       if (result) {
-        console.log('[Profile] Google sign-in completed for:', result.user.email);
         if (redirect === 'checkout') {
           router.push('/checkout');
         }
       }
     } catch (err) {
-      console.error('[Profile] Google sign-in error:', err.code, err.message);
       setAuthError(getAuthErrorMessage(err));
     } finally {
       setGoogleLoading(false);
@@ -368,7 +384,7 @@ function ProfilePageContent() {
                 {/* Find detail log in steps */}
                 {steps.find(s => s.status === status) && (
                   <span className="text-[10px] text-gray-400 font-light mt-0.5 max-w-[8rem] truncate sm:whitespace-normal">
-                    {new Date(steps.find(s => s.status === status).timestamp).toLocaleDateString()}
+                    {formatDate(steps.find(s => s.status === status).timestamp)}
                   </span>
                 )}
               </div>
@@ -380,6 +396,14 @@ function ProfilePageContent() {
   };
 
   // 1. Render login screen if unauthenticated
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 font-sans">
+        <div className="h-80 rounded-2xl border border-gray-200 dark:border-[#222] bg-white dark:bg-[#0A0A0A] animate-pulse" />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 font-sans">
@@ -453,7 +477,9 @@ function ProfilePageContent() {
                   </div>
                 )}
 
-                {authError && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{authError}</p>}
+                {(authError || authSyncError) && (
+                  <p className="text-sm text-red-600 dark:text-red-400 font-medium">{authError || authSyncError}</p>
+                )}
                 
                 <div id="recaptcha-container"></div>
 
@@ -515,7 +541,9 @@ function ProfilePageContent() {
                   />
                 </div>
 
-                {authError && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{authError}</p>}
+                {(authError || authSyncError) && (
+                  <p className="text-sm text-red-600 dark:text-red-400 font-medium">{authError || authSyncError}</p>
+                )}
 
                 <button
                   type="submit"
@@ -591,10 +619,10 @@ function ProfilePageContent() {
       <div className="glass-panel p-6 rounded-2xl border border-brand-primary/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-4">
           <div className="h-16 w-16 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/25 flex items-center justify-center font-bold text-xl uppercase">
-            {user.name.charAt(0)}
+            {(user.name || user.email || 'M').charAt(0).toUpperCase()}
           </div>
           <div>
-            <h2 className="font-serif text-2xl font-bold">{user.name}</h2>
+            <h2 className="font-serif text-2xl font-bold">{user.name || 'Mradhul Customer'}</h2>
             <p className="text-xs text-gray-500 font-light">{user.email} • Role: <strong className="text-brand-gold uppercase">{user.role}</strong></p>
           </div>
         </div>
@@ -672,7 +700,7 @@ function ProfilePageContent() {
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] text-gray-400 uppercase font-semibold">Date</p>
-                            <p className="text-xs font-bold">{new Date(order.createdAt).toLocaleDateString()}</p>
+                            <p className="text-xs font-bold">{formatDate(order.createdAt)}</p>
                           </div>
                         </div>
 
@@ -721,16 +749,12 @@ function ProfilePageContent() {
                             </div>
 
                             {/* Stepper progress bar */}
-                            {renderTrackingStepper(order.trackingSteps, order.status)}
+                            {renderTrackingStepper(order.trackingSteps || [], order.status)}
 
                             <div className="flex items-center justify-between text-xs mt-2 border-t border-black/5 dark:border-white/5 pt-3">
                               <span className="text-gray-500 font-light">Estimated Delivery:</span>
                               <span className="font-bold text-gray-800 dark:text-gray-200">
-                                {new Date(new Date(order.createdAt).getTime() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric'
-                                })}
+                                {estimateDeliveryDate(order.createdAt)}
                               </span>
                             </div>
 

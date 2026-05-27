@@ -1,12 +1,11 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import Icon from 'react-native-vector-icons/Feather';
 import { MobileProvider } from './context';
 
-// Import Screens
 import HomeScreen from './screens/HomeScreen';
 import CategoriesScreen from './screens/CategoriesScreen';
 import ProductDetailsScreen from './screens/ProductDetailsScreen';
@@ -20,20 +19,15 @@ function TabNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName;
+        tabBarIcon: ({ focused, color }) => {
+          const icons = {
+            Home: 'home',
+            Categories: 'grid',
+            Bag: 'shopping-bag',
+            Profile: 'user'
+          };
 
-          if (route.name === 'Home') {
-            iconName = focused ? '🏠' : '🏡';
-          } else if (route.name === 'Categories') {
-            iconName = focused ? '📂' : '📁';
-          } else if (route.name === 'Bag') {
-            iconName = focused ? '👜' : '💼';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? '👤' : '👤';
-          }
-
-          return <Text style={{ fontSize: 20 }}>{iconName}</Text>;
+          return <Icon name={icons[route.name] || 'circle'} size={focused ? 23 : 21} color={color} />;
         },
         tabBarActiveTintColor: '#701122',
         tabBarInactiveTintColor: '#6C757D',
@@ -41,8 +35,8 @@ function TabNavigator() {
           backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: '#EBEBEB',
-          height: 60,
-          paddingBottom: 8,
+          height: 64,
+          paddingBottom: 9,
           paddingTop: 8
         },
         tabBarLabelStyle: {

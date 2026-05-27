@@ -70,6 +70,11 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
+if (process.env.NODE_ENV === 'production' && /localhost|127\.0\.0\.1/i.test(MONGO_URI)) {
+  console.error('Production MONGO_URI cannot point to localhost. Configure the MongoDB Atlas URI in Railway.');
+  process.exit(1);
+}
+
 console.log('Connecting to MongoDB Atlas...');
 mongoose.connect(MONGO_URI)
   .then(() => {

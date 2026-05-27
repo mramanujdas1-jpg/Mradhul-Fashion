@@ -6,12 +6,24 @@ import { onAuthStateChange, logOut, processRedirectResult } from './firebase';
 
 const AppContext = createContext();
 
+const readJsonFromStorage = (key, fallback) => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    window.localStorage.removeItem(key);
+    return fallback;
+  }
+};
+
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [cart, setCart] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [theme, setTheme] = useState('light');
   const [loading, setLoading] = useState(true);
+  const [authSyncError, setAuthSyncError] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
 
   // Set up Firebase auth observer & local storage hydration
@@ -22,35 +34,35 @@ export function AppProvider({ children }) {
       const storedWishlist = localStorage.getItem('mf_wishlist');
       const storedTheme = localStorage.getItem('mf_theme');
 
-      if (storedCart) setCart(JSON.parse(storedCart));
-      if (storedWishlist) setWishlist(JSON.parse(storedWishlist));
+      if (storedCart) setCart(readJsonFromStorage('mf_cart', []));
+      if (storedWishlist) setWishlist(readJsonFromStorage('mf_wishlist', []));
       if (storedTheme) {
         setTheme(storedTheme);
         document.body.classList.toggle('dark', storedTheme === 'dark');
       }
-    } catch (e) {
-      console.error('Failed to parse local storage hydration:', e);
+    } catch {
+      setCart([]);
+      setWishlist([]);
     }
 
     // 1.5 Process potential Firebase redirect result (only relevant after signInWithRedirect)
     processRedirectResult().catch(err => {
       // Only alert if a real auth error occurred (not just "no redirect pending")
-      if (err?.code && err.code !== 'auth/null-user') {
-        console.error('Redirect sign-in failed:', err.code, err.message);
-      }
+      if (err?.code && err.code !== 'auth/null-user') setAuthSyncError(err.message);
     });
 
     // 2. Firebase Authentication Observer
     const unsubscribe = onAuthStateChange(async (firebaseUser) => {
       setLoading(true);
+      setAuthSyncError('');
       if (firebaseUser) {
         try {
           const token = await firebaseUser.getIdToken();
           localStorage.setItem('mf_auth_token', token);
 
           // Retrieve any offline guest cart/wishlist to merge
-          const guestCart = JSON.parse(localStorage.getItem('mf_cart') || '[]');
-          const guestWishlist = JSON.parse(localStorage.getItem('mf_wishlist') || '[]');
+          const guestCart = readJsonFromStorage('mf_cart', []);
+          const guestWishlist = readJsonFromStorage('mf_wishlist', []);
 
           // Sync profiles and merge items on Express API
           const response = await fetch(`${API_BASE}/auth/sync`, {
@@ -76,14 +88,28 @@ export function AppProvider({ children }) {
             localStorage.setItem('mf_cart', JSON.stringify(syncedUser.cart || []));
             localStorage.setItem('mf_wishlist', JSON.stringify(syncedUser.wishlist || []));
           } else {
-            console.error('Express user sync failed', await response.text());
-            alert('Login failed: Our backend server is currently unable to verify your account. Please try again later.');
-            await logOut();
+            const fallbackUser = {
+              firebaseUid: firebaseUser.uid,
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Mradhul Customer',
+              email: firebaseUser.email || '',
+              role: 'customer',
+              token,
+              syncPending: true
+            };
+            setUser(fallbackUser);
+            setAuthSyncError('Signed in with Firebase, but the backend profile sync is currently unavailable.');
           }
         } catch (err) {
-          console.error('Error syncing auth state with API:', err);
-          alert('Login failed: Network error occurred while contacting our servers.');
-          await logOut();
+          const token = await firebaseUser.getIdToken().catch(() => '');
+          setUser({
+            firebaseUid: firebaseUser.uid,
+            name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Mradhul Customer',
+            email: firebaseUser.email || '',
+            role: 'customer',
+            token,
+            syncPending: true
+          });
+          setAuthSyncError('Signed in with Firebase, but the backend profile sync is currently unavailable.');
         }
       } else {
         // Clear authenticated session details on sign out
@@ -97,8 +123,7 @@ export function AppProvider({ children }) {
     // PWA Service Worker Registration
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
-        .then((reg) => console.log('ServiceWorker active on scope:', reg.scope))
-        .catch((err) => console.warn('ServiceWorker registration error:', err));
+        .catch(() => {});
     }
 
     return () => unsubscribe();
@@ -124,7 +149,7 @@ export function AppProvider({ children }) {
       localStorage.removeItem('mf_cart');
       localStorage.removeItem('mf_wishlist');
     } catch (err) {
-      console.error('Logout failed:', err);
+      setAuthSyncError('Unable to sign out right now. Please try again.');
     }
   };
 
@@ -140,7 +165,7 @@ export function AppProvider({ children }) {
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ cart: updatedCart })
-    }).catch(err => console.error('Failed to sync cart updates with database:', err));
+    }).catch(() => {});
   };
 
   // helper to sync wishlist state to API database if user is logged in
@@ -155,7 +180,7 @@ export function AppProvider({ children }) {
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({ wishlist: updatedWishlist })
-    }).catch(err => console.error('Failed to sync wishlist updates with database:', err));
+    }).catch(() => {});
   };
 
   // Add Item to Cart
@@ -248,6 +273,7 @@ export function AppProvider({ children }) {
         wishlist,
         theme,
         loading,
+        authSyncError,
         logout,
         toggleTheme,
         addToCart,
