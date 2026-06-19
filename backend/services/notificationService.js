@@ -3,31 +3,31 @@ const admin = require('firebase-admin');
 let fcmInitialized = false;
 
 try {
-  if (!admin.apps.length) {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      fcmInitialized = true;
-    } else if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PROJECT_ID) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
-        })
-      });
-      fcmInitialized = true;
-    } else {
-      console.warn('Firebase Admin credentials missing. Push notifications are disabled.');
-    }
-  } else {
+  if (admin.apps.length > 0) {
+    // Firebase Admin already initialized by auth.js — reuse it
     fcmInitialized = true;
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    fcmInitialized = true;
+  } else if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PROJECT_ID) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      })
+    });
+    fcmInitialized = true;
+  } else {
+    console.warn('Firebase Admin credentials missing. Push notifications are disabled.');
   }
 } catch (error) {
   console.error('Failed to initialize Firebase Admin for notifications:', error.message);
 }
+
 
 /**
  * Sends a push notification to a specific list of FCM tokens.

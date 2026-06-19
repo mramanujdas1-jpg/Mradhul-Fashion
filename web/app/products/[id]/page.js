@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useApp } from '../../context';
 import { useRouter } from 'next/navigation';
 import ProductCard from '../../../components/ProductCard';
@@ -39,11 +40,19 @@ export default function ProductDetails({ params }) {
   const fetchProductDetails = async () => {
     setLoading(true);
     try {
-      // First try to fetch by slug
-      let res = await fetch(`${API_BASE}/products/slug/${productIdOrSlug}`);
-      if (!res.ok) {
-        // Fallback to fetch by ID if slug fails
+      let res;
+      // Check if it's a 24-character hex string (MongoDB ObjectId)
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(productIdOrSlug);
+
+      if (isObjectId) {
         res = await fetch(`${API_BASE}/products/${productIdOrSlug}`);
+      } else {
+        // First try to fetch by slug
+        res = await fetch(`${API_BASE}/products/slug/${productIdOrSlug}`);
+        if (!res.ok) {
+          // Fallback to fetch by ID if slug fails
+          res = await fetch(`${API_BASE}/products/${productIdOrSlug}`);
+        }
       }
 
       if (res.ok) {
@@ -85,25 +94,35 @@ export default function ProductDetails({ params }) {
     fetchProductDetails();
   }, [productIdOrSlug]);
 
-  const handleAddToCart = () => {
-    if (!product) return;
+  const validateCartAddition = () => {
+    if (!product) return false;
     if (!selectedSize) {
       alert('Please select a size');
-      return;
+      return false;
     }
     
     // Check stock for selected size
     const availableStock = product.stockPerSize ? (product.stockPerSize[selectedSize] || 0) : product.stock;
     if (availableStock < quantity) {
       alert(`Only ${availableStock} items left for size ${selectedSize}`);
-      return;
+      return false;
     }
+    return true;
+  };
 
+  const handleAddToCart = () => {
+    if (!validateCartAddition()) return;
     addToCart(product, selectedSize, quantity);
     setShowCartSuccess(true);
     setTimeout(() => {
       setShowCartSuccess(false);
     }, 3500);
+  };
+
+  const handleBuyNow = () => {
+    if (!validateCartAddition()) return;
+    addToCart(product, selectedSize, quantity);
+    router.push('/checkout');
   };
 
   const handleCheckPincode = (e) => {
@@ -258,6 +277,12 @@ export default function ProductDetails({ params }) {
               <ShoppingBag size={18} /> Add to Bag
             </button>
             <button
+              onClick={handleBuyNow}
+              className="flex-1 bg-gray-900 hover:bg-black text-white h-14 rounded-md font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
+            >
+              <Send size={18} /> Buy Now
+            </button>
+            <button
               onClick={() => toggleWishlist(product)}
               className="h-14 px-6 border border-gray-300 dark:border-[#444] rounded-md flex items-center justify-center hover:border-gray-900 dark:hover:border-white transition-colors group"
             >
@@ -330,6 +355,32 @@ export default function ProductDetails({ params }) {
         </div>
       </div>
       
+      {/* Reviews Section */}
+      <section className="mt-24 border-t border-gray-200 dark:border-[#333] pt-12">
+        <h3 className="font-serif text-2xl font-semibold tracking-wider mb-8">Customer Reviews</h3>
+        {reviews.length > 0 ? (
+          <div className="space-y-6">
+            {reviews.map((review) => (
+              <div key={review._id} className="pb-6 border-b border-gray-100 dark:border-[#222]">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-sm">{review.name}</span>
+                  {review.verifiedPurchase && <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full font-semibold">Verified</span>}
+                  <span className="text-xs text-gray-400 ml-auto">{new Date(review.createdAt).toLocaleDateString()}</span>
+                </div>
+                <div className="flex items-center gap-1 mb-3">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} size={14} className={i < review.rating ? "fill-brand-gold text-brand-gold" : "text-gray-300 dark:text-[#444]"} />
+                  ))}
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-300">{review.comment}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 italic">No reviews yet for this product. Be the first to review!</p>
+        )}
+      </section>
+
       {/* Recommended Slider carousel */}
       {recommended.length > 0 && (
         <section className="mt-24 border-t border-gray-200 dark:border-[#333] pt-12">

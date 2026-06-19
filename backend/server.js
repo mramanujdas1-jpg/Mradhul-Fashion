@@ -20,9 +20,29 @@ const webhookRoutes = require('./routes/webhookRoutes');
 
 const app = express();
 
-// Middlewares
-app.use(cors());
+// CORS — explicitly whitelist the Vercel frontend and localhost dev
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'https://mradhulfashion.com',
+  'https://www.mradhulfashion.com',
+  'https://mradhulfashion.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001'
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(o => origin === o || origin.endsWith('.vercel.app'))) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
+  credentials: true
+}));
+
 app.use(express.json());
+
 
 // Root API status endpoint
 app.get('/api/status', (req, res) => {

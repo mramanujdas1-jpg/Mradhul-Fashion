@@ -93,8 +93,10 @@ productSchema.pre('save', function (next) {
   }
   
   if (!this.slug && this.name) {
-    this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-    // Append random string to ensure uniqueness if needed, but for now just the name
+    const base = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    // Append short ObjectId suffix to ensure global uniqueness across all products
+    const suffix = this._id ? this._id.toString().slice(-6) : Math.random().toString(36).slice(2, 8);
+    this.slug = `${base}-${suffix}`;
   }
   next();
 });
