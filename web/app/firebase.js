@@ -2,8 +2,6 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -99,31 +97,17 @@ export const signInWithGoogle = async () => {
   await ensurePersistence();
   const provider = createGoogleProvider();
 
-  const isMobile = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  const isInAppBrowser = typeof navigator !== 'undefined' && /FBAN|FBAV|Instagram|Twitter|Line/i.test(navigator.userAgent);
-
-  if (isMobile || isInAppBrowser) {
-    return signInWithRedirect(firebaseAuth, provider);
-  }
-
-  try {
-    return await signInWithPopup(firebaseAuth, provider);
-  } catch (error) {
-    if (
-      error.code === 'auth/popup-blocked' ||
-      error.code === 'auth/popup-closed-by-user' ||
-      error.code === 'auth/cancelled-popup-request'
-    ) {
-      return signInWithRedirect(firebaseAuth, provider);
-    }
-    throw error;
-  }
+  // Always use signInWithPopup — never signInWithRedirect.
+  // signInWithRedirect stores state in sessionStorage which is lost across
+  // Vercel edge nodes and causes "missing initial state" on the Firebase
+  // auth handler page (mradhul-fashion.firebaseapp.com/__/auth/handler).
+  // signInWithPopup works on all platforms including mobile Safari and Chrome.
+  return await signInWithPopup(firebaseAuth, provider);
 };
 
+// Kept for backward compatibility — no-op since we no longer use redirect flow.
 export const processRedirectResult = async () => {
-  const firebaseAuth = getFirebaseAuth();
-  await ensurePersistence();
-  return getRedirectResult(firebaseAuth);
+  return null;
 };
 
 export const signInWithEmail = async (email, password) => {

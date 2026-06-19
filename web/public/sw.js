@@ -8,6 +8,16 @@ const ASSETS_TO_CACHE = [
   '/manifest.json'
 ];
 
+// Never cache these — Firebase auth redirect routes, API calls, and
+// cross-origin requests must always reach the network directly.
+const NEVER_CACHE_PATTERNS = [
+  /\/__\/auth\//,          // Firebase auth handler
+  /\/api\//,               // Backend API
+  /firebaseapp\.com/,      // Firebase domains
+  /googleapis\.com/,       // Google APIs
+  /accounts\.google\.com/, // Google accounts
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -33,8 +43,17 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only cache GET requests
+  // Only cache same-origin GET requests
   if (event.request.method !== 'GET') return;
+
+  const url = event.request.url;
+
+  // Skip Firebase auth, API calls, and cross-origin requests — always network
+  const shouldSkip = NEVER_CACHE_PATTERNS.some((pattern) => pattern.test(url));
+  if (shouldSkip) return;
+
+  // Skip cross-origin requests
+  if (!url.startsWith(self.location.origin)) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -58,3 +77,4 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
