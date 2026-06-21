@@ -143,10 +143,26 @@ export function AppProvider({ children }) {
       setLoading(false);
     });
 
-    // PWA Service Worker Registration
+    // PWA Service Worker Registration & Cleanup
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
-        .catch(() => {});
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) {
+          // Force update or unregister to clear stale cached /__/auth/ routes
+          registration.update();
+        }
+      });
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      
+      // Clear old caches to prevent "The requested action is invalid" Firebase error
+      if (window.caches) {
+        caches.keys().then(names => {
+          names.forEach(name => {
+            if (name === 'mradhul-fashion-cache-v1') {
+              caches.delete(name);
+            }
+          });
+        });
+      }
     }
 
     return () => unsubscribe();
