@@ -270,8 +270,10 @@ router.put('/:id', protect, approvedSeller, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
       // Enforce seller isolation
-      if (product.seller.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      if (product.seller && product.seller.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
         return res.status(403).json({ message: 'Not authorized: you can only update your own products' });
+      } else if (!product.seller && req.user.role !== 'admin') {
+         return res.status(403).json({ message: 'Not authorized: legacy product missing seller ID' });
       }
 
       const updateData = req.body;
@@ -305,8 +307,10 @@ router.delete('/:id', protect, approvedSeller, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
       // Enforce seller isolation
-      if (product.seller.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      if (product.seller && product.seller.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
         return res.status(403).json({ message: 'Not authorized: you can only delete your own products' });
+      } else if (!product.seller && req.user.role !== 'admin') {
+         return res.status(403).json({ message: 'Not authorized: legacy product missing seller ID' });
       }
 
       // Delete images from Cloudinary if configured and exist
