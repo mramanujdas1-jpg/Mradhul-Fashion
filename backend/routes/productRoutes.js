@@ -291,6 +291,11 @@ router.put('/:id', protect, approvedSeller, async (req, res) => {
         }
       });
 
+      // Fix for legacy products: automatically assign current admin as seller before save
+      if (!product.seller) {
+        product.seller = req.user._id;
+      }
+
       const updatedProduct = await product.save();
       res.json(updatedProduct);
     } else {
