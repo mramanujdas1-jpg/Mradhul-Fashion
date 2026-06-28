@@ -1,5 +1,12 @@
 const mongoose = require('mongoose');
 
+const normalizeOptionalSku = (value) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
 // Address Schema
 const addressSchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -73,7 +80,7 @@ const productSchema = new mongoose.Schema({
     of: Number,
     default: {}
   },
-  sku: { type: String, unique: true, sparse: true },
+  sku: { type: String, unique: true, sparse: true, set: normalizeOptionalSku },
   rating: { type: Number, default: 0 },
   numReviews: { type: Number, default: 0 },
   isTrending: { type: Boolean, default: false },

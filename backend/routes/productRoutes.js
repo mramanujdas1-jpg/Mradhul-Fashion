@@ -3,6 +3,21 @@ const router = express.Router();
 const { Product, Review } = require('../models');
 const { protect, admin, approvedSeller } = require('../auth');
 
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const normalizeOptionalSku = (value) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+const normalizeProductSku = (data) => {
+  if (data && hasOwn(data, 'sku')) {
+    data.sku = normalizeOptionalSku(data.sku);
+  }
+};
+
 // Get All Products (with advanced filter, search & sorting)
 router.get('/', async (req, res) => {
   const pageSize = Number(req.query.pageSize) || 12;
@@ -239,6 +254,7 @@ router.get('/seller/mine', protect, approvedSeller, async (req, res) => {
 router.post('/', protect, approvedSeller, async (req, res) => {
   try {
     const productData = req.body;
+    normalizeProductSku(productData);
     
     // Set some defaults if missing
     if (!productData.name) productData.name = 'Sample Product';
@@ -277,6 +293,8 @@ router.put('/:id', protect, approvedSeller, async (req, res) => {
       }
 
       const updateData = req.body;
+      const skuProvided = hasOwn(updateData, 'sku');
+      normalizeProductSku(updateData);
       
       const allowedFields = [
         'name', 'slug', 'shortDescription', 'description', 'price', 'discountPrice', 'category', 
@@ -286,7 +304,9 @@ router.put('/:id', protect, approvedSeller, async (req, res) => {
       ];
 
       allowedFields.forEach(field => {
-        if (updateData[field] !== undefined) {
+        if (field === 'sku' && skuProvided) {
+          product[field] = updateData[field];
+        } else if (updateData[field] !== undefined) {
           product[field] = updateData[field];
         }
       });
