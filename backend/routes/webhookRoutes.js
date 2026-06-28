@@ -76,8 +76,12 @@ router.post('/razorpay', async (req, res) => {
 
             // Decrement stock levels since payment is confirmed via webhook
             for (const item of order.orderItems) {
+              const incPayload = { stock: -item.qty };
+              if (item.size) {
+                incPayload[`stockPerSize.${item.size}`] = -item.qty;
+              }
               await require('../models').Product.findByIdAndUpdate(item.product, {
-                $inc: { stock: -item.qty }
+                $inc: incPayload
               });
             }
             console.log(`Order ${order._id} marked as paid via webhook.`);

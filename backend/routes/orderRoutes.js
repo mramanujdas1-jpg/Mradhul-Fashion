@@ -135,8 +135,12 @@ router.post('/', protect, async (req, res) => {
       // Decrement stock levels immediately only if COD. For Razorpay, deduct on payment confirmation.
       if (paymentMethod === 'COD') {
         for (const item of groupItems) {
+          const incPayload = { stock: -item.qty };
+          if (item.size) {
+            incPayload[`stockPerSize.${item.size}`] = -item.qty;
+          }
           await Product.findByIdAndUpdate(item.product, {
-            $inc: { stock: -item.qty }
+            $inc: incPayload
           });
         }
       }
