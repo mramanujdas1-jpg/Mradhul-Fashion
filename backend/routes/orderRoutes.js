@@ -5,6 +5,33 @@ const { protect, admin, seller } = require('../auth');
 const { notifyOrderStatusChange } = require('../services/notificationService');
 const Razorpay = require('razorpay');
 
+const buildStockIncrement = (items, direction, includeSizeStock = true) => {
+  const updates = [];
+  items.forEach((item) => {
+    const incPayload = { stock: direction * item.qty };
+    if (includeSizeStock && item.size) {
+      incPayload[`stockPerSize.${item.size}`] = direction * item.qty;
+    }
+    updates.push({ product: item.product, incPayload });
+  });
+  return updates;
+};
+
+const applyStockUpdates = async (items, direction, includeSizeStock = true) => {
+  const updates = buildStockIncrement(items, direction, includeSizeStock);
+  for (const update of updates) {
+    await Product.findByIdAndUpdate(update.product, { $inc: update.incPayload });
+  }
+};
+
+const restoreOrderStock = async (order) => {
+  const shouldRestoreStock = order.inventoryReserved || order.paymentMethod === 'COD' || order.isPaid;
+  if (!shouldRestoreStock) return;
+
+  const includeSizeStock = order.inventoryReserved || order.paymentMethod === 'COD';
+  await applyStockUpdates(order.orderItems, 1, includeSizeStock);
+};
+
 let razorpayInstance;
 try {
   if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -117,6 +144,7 @@ router.post('/', protect, async (req, res) => {
         taxPrice: groupTaxPrice,
         shippingPrice: groupShippingPrice,
         totalPrice: groupTotalPrice,
+        inventoryReserved: paymentMethod === 'COD',
         trackingSteps: [
           { status: 'Pending', description: 'Your order has been received and is waiting processing.' }
         ]
@@ -134,15 +162,7 @@ router.post('/', protect, async (req, res) => {
 
       // Decrement stock levels immediately only if COD. For Razorpay, deduct on payment confirmation.
       if (paymentMethod === 'COD') {
-        for (const item of groupItems) {
-          const incPayload = { stock: -item.qty };
-          if (item.size) {
-            incPayload[`stockPerSize.${item.size}`] = -item.qty;
-          }
-          await Product.findByIdAndUpdate(item.product, {
-            $inc: incPayload
-          });
-        }
+        await applyStockUpdates(groupItems, -1, true);
       }
     }
 
@@ -204,14 +224,11 @@ router.put('/:id/pay', protect, async (req, res) => {
         status: 'Processing',
         description: 'Payment verified. Order is being processed.'
       });
-      await order.save();
 
       // Decrement stock levels
-      for (const item of order.orderItems) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: { stock: -item.qty }
-        });
-      }
+      await applyStockUpdates(order.orderItems, -1, true);
+      order.inventoryReserved = true;
+      await order.save();
 
       await order.populate('user');
       notifyOrderStatusChange(order.user, order._id, order.status).catch(() => {});
@@ -330,22 +347,20 @@ router.put('/:id/cancel', protect, async (req, res) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    if (order.status !== 'Pending' && order.status !== 'Processing') {
+    if (!['Pending', 'Processing'].includes(order.status)) {
       return res.status(400).json({ message: 'Order cannot be cancelled after shipment.' });
     }
 
     order.status = 'Cancelled';
+    order.cancelledAt = new Date();
+    order.cancellationReason = reason || 'Customer request';
     order.trackingSteps.push({
       status: 'Cancelled',
       description: `Order cancelled by customer. Reason: ${reason || 'Customer request'}`
     });
 
-    // Restore stock levels
-    for (const item of order.orderItems) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: item.qty }
-      });
-    }
+    await restoreOrderStock(order);
+    order.inventoryReserved = false;
 
     const updatedOrder = await order.save();
     
@@ -359,9 +374,9 @@ router.put('/:id/cancel', protect, async (req, res) => {
   }
 });
 
-// User: Request Return (Only if Delivered, within 7 days)
+// User: Request Return (Only if Delivered, within 15 days)
 router.put('/:id/return', protect, async (req, res) => {
-  const { reason, comment } = req.body;
+  const { reason, description, comment } = req.body;
   try {
     const order = await Order.findById(req.params.id);
     if (!order) {
@@ -377,16 +392,31 @@ router.put('/:id/return', protect, async (req, res) => {
       return res.status(400).json({ message: 'Order must be delivered before requesting a return.' });
     }
 
-    // Check 7 days limit
-    const returnLimit = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+    const normalizedReason = typeof reason === 'string' ? reason.trim() : '';
+    const normalizedDescription = typeof description === 'string'
+      ? description.trim()
+      : (typeof comment === 'string' ? comment.trim() : '');
+
+    if (!normalizedReason) {
+      return res.status(400).json({ message: 'Return reason is required.' });
+    }
+
+    // Check 15 days limit
+    const returnLimit = 15 * 24 * 60 * 60 * 1000; // 15 days in ms
     if (order.deliveredAt && (Date.now() - new Date(order.deliveredAt).getTime() > returnLimit)) {
-      return res.status(400).json({ message: 'Return period (7 days) has expired.' });
+      return res.status(400).json({ message: 'Return period (15 days) has expired.' });
     }
 
     order.status = 'Return Requested';
+    order.returnRequest = {
+      reason: normalizedReason,
+      description: normalizedDescription,
+      status: 'Requested',
+      requestedAt: new Date()
+    };
     order.trackingSteps.push({
       status: 'Return Requested',
-      description: `Customer requested a return. Reason: ${reason}. Comments: ${comment || 'None'}`
+      description: `Customer requested a return. Reason: ${normalizedReason}. Description: ${normalizedDescription || 'None'}`
     });
 
     const updatedOrder = await order.save();

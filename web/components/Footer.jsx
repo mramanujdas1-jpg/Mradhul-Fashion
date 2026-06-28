@@ -1,11 +1,53 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Facebook, Instagram, Twitter, ShieldCheck, Truck, RotateCcw } from 'lucide-react';
+import { API_BASE } from '../app/config';
 
 export default function Footer() {
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState('');
+  const [newsletterError, setNewsletterError] = useState('');
+  const [newsletterLoading, setNewsletterLoading] = useState(false);
+
+  const handleNewsletterSubmit = async (e) => {
+    e.preventDefault();
+    const email = newsletterEmail.trim();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    setNewsletterStatus('');
+    setNewsletterError('');
+
+    if (!emailPattern.test(email)) {
+      setNewsletterError('Please enter a valid email address.');
+      return;
+    }
+
+    setNewsletterLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/newsletter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, source: 'footer' })
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setNewsletterError(data.message || 'Unable to subscribe right now.');
+        return;
+      }
+
+      setNewsletterStatus(data.message || 'Thank you for subscribing.');
+      setNewsletterEmail('');
+    } catch {
+      setNewsletterError('Unable to reach newsletter service right now.');
+    } finally {
+      setNewsletterLoading(false);
+    }
+  };
+
   return (
     <footer className="bg-brand-charcoal text-gray-300 border-t border-white/5 pt-16 pb-8 px-4 md:px-12 font-sans">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
@@ -69,10 +111,15 @@ export default function Footer() {
           </h4>
           <div className="flex flex-col gap-2.5 text-sm text-gray-400">
             <Link href="/profile" className="hover:text-brand-primary transition-colors">Track Orders</Link>
-            <Link href="/profile" className="hover:text-brand-primary transition-colors">Shipping & Returns</Link>
+            <Link href="/shipping-policy" className="hover:text-brand-primary transition-colors">Shipping Policy</Link>
+            <Link href="/return-policy" className="hover:text-brand-primary transition-colors">Return Policy</Link>
+            <Link href="/cancellation-policy" className="hover:text-brand-primary transition-colors">Cancellation Policy</Link>
+            <Link href="/faq" className="hover:text-brand-primary transition-colors">FAQ</Link>
             <Link href="/cart" className="hover:text-brand-primary transition-colors">My Cart</Link>
-            <a href="#" className="hover:text-brand-primary transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-brand-primary transition-colors">Terms of Service</a>
+            <Link href="/privacy-policy" className="hover:text-brand-primary transition-colors">Privacy Policy</Link>
+            <Link href="/terms-conditions" className="hover:text-brand-primary transition-colors">Terms & Conditions</Link>
+            <Link href="/about" className="hover:text-brand-primary transition-colors">About Us</Link>
+            <Link href="/contact" className="hover:text-brand-primary transition-colors">Contact Us</Link>
           </div>
         </div>
 
@@ -84,16 +131,23 @@ export default function Footer() {
           <p className="text-sm text-gray-400 font-light leading-relaxed">
             Subscribe to receive styling guides, flash sale reminders, and launch announcements.
           </p>
-          <form className="flex flex-col sm:flex-row gap-2 mt-2" onSubmit={(e) => e.preventDefault()}>
+          <form className="flex flex-col sm:flex-row gap-2 mt-2" onSubmit={handleNewsletterSubmit}>
             <input
               type="email"
+              value={newsletterEmail}
+              onChange={(e) => setNewsletterEmail(e.target.value)}
               placeholder="Enter email address"
               className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-brand-primary flex-grow"
             />
-            <button className="bg-brand-primary hover:bg-brand-primaryDark text-white text-xs font-bold uppercase py-2 px-4 rounded-lg tracking-wider transition-colors duration-300">
-              Join
+            <button
+              disabled={newsletterLoading}
+              className="bg-brand-primary hover:bg-brand-primaryDark text-white text-xs font-bold uppercase py-2 px-4 rounded-lg tracking-wider transition-colors duration-300 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {newsletterLoading ? 'Joining...' : 'Join'}
             </button>
           </form>
+          {newsletterStatus && <p className="text-xs text-brand-gold">{newsletterStatus}</p>}
+          {newsletterError && <p className="text-xs text-red-300">{newsletterError}</p>}
         </div>
       </div>
 

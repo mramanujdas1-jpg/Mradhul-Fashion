@@ -128,6 +128,17 @@ const trackingStepSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 });
 
+const returnRequestSchema = new mongoose.Schema({
+  reason: { type: String },
+  description: { type: String },
+  status: {
+    type: String,
+    enum: ['Requested', 'Approved', 'Rejected', 'Completed'],
+    default: 'Requested'
+  },
+  requestedAt: { type: Date }
+}, { _id: false });
+
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   seller: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -162,6 +173,10 @@ const orderSchema = new mongoose.Schema({
   paidAt: { type: Date },
   isDelivered: { type: Boolean, default: false },
   deliveredAt: { type: Date },
+  inventoryReserved: { type: Boolean, default: false },
+  cancelledAt: { type: Date },
+  cancellationReason: { type: String },
+  returnRequest: returnRequestSchema,
   status: { 
     type: String, 
     enum: ['Pending', 'Processing', 'Shipped', 'Out For Delivery', 'Delivered', 'Cancelled', 'Return Requested', 'Returned'], 
@@ -186,6 +201,18 @@ const couponSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
+const newsletterSubscriberSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  source: { type: String, default: 'footer' },
+  isActive: { type: Boolean, default: true }
+}, { timestamps: true });
+
 module.exports = {
   User: mongoose.model('User', userSchema),
   Product: mongoose.model('Product', productSchema),
@@ -193,5 +220,6 @@ module.exports = {
   Review: mongoose.model('Review', reviewSchema),
   Order: mongoose.model('Order', orderSchema),
   Banner: mongoose.model('Banner', bannerSchema),
-  Coupon: mongoose.model('Coupon', couponSchema)
+  Coupon: mongoose.model('Coupon', couponSchema),
+  NewsletterSubscriber: mongoose.model('NewsletterSubscriber', newsletterSubscriberSchema)
 };

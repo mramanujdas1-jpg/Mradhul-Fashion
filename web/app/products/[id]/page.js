@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useApp } from '../../context';
 import { useRouter } from 'next/navigation';
 import ProductCard from '../../../components/ProductCard';
-import { Star, Heart, ShoppingBag, Truck, RotateCcw, ShieldCheck, RefreshCcw, Send, X, CheckCircle2, ChevronRight, MapPin, Tag } from 'lucide-react';
+import { Star, Heart, ShoppingBag, Truck, RotateCcw, ShieldCheck, RefreshCcw, Send, X, CheckCircle2, ChevronRight, ChevronLeft, MapPin, Tag, ZoomIn } from 'lucide-react';
 
 import { API_BASE } from '../../config';
 
@@ -33,6 +33,10 @@ export default function ProductDetails({ params }) {
   const [zoomPos, setZoomPos] = useState({ x: 0, y: 0 });
   const [isZoomed, setIsZoomed] = useState(false);
   const [showCartSuccess, setShowCartSuccess] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerZoomed, setViewerZoomed] = useState(false);
+  const [touchStartX, setTouchStartX] = useState(null);
 
   const isWishlisted = product && wishlist.some((item) => item._id === product._id);
 
@@ -93,6 +97,66 @@ export default function ProductDetails({ params }) {
   useEffect(() => {
     fetchProductDetails();
   }, [productIdOrSlug]);
+
+  useEffect(() => {
+    if (!viewerOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeImageViewer();
+      }
+      if (event.key === 'ArrowRight') {
+        showNextImage();
+      }
+      if (event.key === 'ArrowLeft') {
+        showPreviousImage();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [viewerOpen, viewerIndex, product]);
+
+  const openImageViewer = (index) => {
+    setViewerIndex(index);
+    setViewerZoomed(false);
+    setViewerOpen(true);
+  };
+
+  const closeImageViewer = () => {
+    setViewerOpen(false);
+    setViewerZoomed(false);
+  };
+
+  const showNextImage = () => {
+    if (!product?.images?.length) return;
+    setViewerZoomed(false);
+    setViewerIndex((current) => (current + 1) % product.images.length);
+  };
+
+  const showPreviousImage = () => {
+    if (!product?.images?.length) return;
+    setViewerZoomed(false);
+    setViewerIndex((current) => (current - 1 + product.images.length) % product.images.length);
+  };
+
+  const handleViewerTouchEnd = (event) => {
+    if (touchStartX === null) return;
+    const deltaX = event.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(deltaX) > 50) {
+      if (deltaX < 0) {
+        showNextImage();
+      } else {
+        showPreviousImage();
+      }
+    }
+    setTouchStartX(null);
+  };
 
   const validateCartAddition = () => {
     if (!product) return false;
@@ -180,9 +244,18 @@ export default function ProductDetails({ params }) {
         <div className="lg:w-3/5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:sticky lg:top-24">
             {product.images.map((img, idx) => (
-              <div key={idx} className="aspect-[3/4] rounded-sm overflow-hidden bg-gray-100 relative group cursor-zoom-in">
+              <button
+                key={idx}
+                type="button"
+                onClick={() => openImageViewer(idx)}
+                className="aspect-[3/4] rounded-sm overflow-hidden bg-gray-100 relative group cursor-zoom-in text-left"
+                aria-label={`Open ${product.name} image ${idx + 1}`}
+              >
                 <img src={img} alt={`${product.name} - view ${idx+1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-              </div>
+                <span className="absolute bottom-3 right-3 rounded-full bg-black/55 p-2 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <ZoomIn size={16} />
+                </span>
+              </button>
             ))}
           </div>
         </div>
@@ -354,6 +427,73 @@ export default function ProductDetails({ params }) {
           </div>
         </div>
       </div>
+
+      {viewerOpen && product.images?.length > 0 && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center px-4 py-8"
+          onClick={closeImageViewer}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Product image viewer"
+        >
+          <button
+            type="button"
+            onClick={closeImageViewer}
+            className="absolute right-4 top-4 rounded-full border border-white/20 bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
+            aria-label="Close image viewer"
+          >
+            <X size={22} />
+          </button>
+
+          {product.images.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showPreviousImage();
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
+                aria-label="Previous image"
+              >
+                <ChevronLeft size={26} />
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showNextImage();
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/10 p-3 text-white transition-colors hover:bg-white/20"
+                aria-label="Next image"
+              >
+                <ChevronRight size={26} />
+              </button>
+            </>
+          )}
+
+          <div
+            className="max-h-full max-w-6xl overflow-auto"
+            onClick={(event) => event.stopPropagation()}
+            onTouchStart={(event) => setTouchStartX(event.touches[0].clientX)}
+            onTouchEnd={handleViewerTouchEnd}
+          >
+            <img
+              src={product.images[viewerIndex]}
+              alt={`${product.name} fullscreen view ${viewerIndex + 1}`}
+              onClick={() => setViewerZoomed((value) => !value)}
+              className={`mx-auto max-h-[82vh] select-none object-contain transition-transform duration-300 ${
+                viewerZoomed ? 'max-w-none cursor-zoom-out scale-150' : 'max-w-full cursor-zoom-in'
+              }`}
+              draggable={false}
+            />
+          </div>
+
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white">
+            {viewerIndex + 1} / {product.images.length} - Click image to zoom
+          </div>
+        </div>
+      )}
       
       {/* Reviews Section */}
       <section className="mt-24 border-t border-gray-200 dark:border-[#333] pt-12">

@@ -130,7 +130,7 @@ function ProfilePageContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('mf_auth_token')}`
         },
-        body: JSON.stringify({ reason: returnReason, comment: returnComment })
+        body: JSON.stringify({ reason: returnReason, description: returnComment })
       });
       if (res.ok) {
         setSuccessMsg('Return request submitted successfully.');
@@ -270,6 +270,114 @@ function ProfilePageContent() {
             window.print();
           };
         </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(invoiceHtml);
+    printWindow.document.close();
+  };
+
+  const handlePrintPremiumInvoice = (order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pop-up blocker is enabled. Please allow pop-ups to print the invoice.');
+      return;
+    }
+
+    const invoiceNumber = `MF-${String(order._id).slice(-8).toUpperCase()}`;
+    const sellerName = order.seller?.sellerInfo?.storeName || order.seller?.name || 'Mradhul Fashion Seller';
+    const customerName = user?.name || order.shippingAddress?.name || 'Customer';
+    const customerEmail = user?.email || 'N/A';
+    const address = order.shippingAddress;
+    const itemsRows = order.orderItems.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td><strong>${item.name}</strong><br/><span>Product ID: ${item.product || 'N/A'}</span></td>
+        <td>${item.size || 'N/A'}</td>
+        <td>${item.qty}</td>
+        <td>Rs. ${item.price}</td>
+        <td>Rs. ${item.price * item.qty}</td>
+      </tr>
+    `).join('');
+
+    const invoiceHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${invoiceNumber}</title>
+        <meta charset="utf-8" />
+        <style>
+          body { margin: 0; padding: 34px; color: #2B1D20; font-family: Arial, Helvetica, sans-serif; background: #fff; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #701122; padding-bottom: 20px; }
+          .brand { display: flex; align-items: center; gap: 12px; }
+          .brand img { width: 54px; height: 54px; border-radius: 50%; border: 1px solid #EAD6B0; object-fit: contain; }
+          .brand-title { color: #701122; font-family: Georgia, serif; font-size: 25px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+          .brand-sub { color: #C5A059; display: block; font-size: 9px; letter-spacing: 3px; margin-top: 4px; }
+          .invoice-title { color: #C5A059; font-size: 20px; font-weight: bold; letter-spacing: 1px; text-align: right; text-transform: uppercase; }
+          .muted { color: #6C757D; font-size: 12px; line-height: 1.6; }
+          .meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 24px 0; }
+          .meta div, .panel { border: 1px solid #ECEAE6; border-radius: 10px; padding: 11px; }
+          .meta strong, .panel-title { color: #701122; display: block; font-size: 10px; letter-spacing: 1px; margin-bottom: 6px; text-transform: uppercase; }
+          .addresses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+          .panel { font-size: 12px; line-height: 1.7; }
+          table { border-collapse: collapse; font-size: 12px; margin-top: 8px; width: 100%; }
+          th { background: #FAF7F2; border-bottom: 2px solid #C5A059; color: #701122; font-size: 10px; letter-spacing: 1px; padding: 11px 8px; text-align: left; text-transform: uppercase; }
+          td { border-bottom: 1px solid #ECEAE6; padding: 12px 8px; vertical-align: top; }
+          td:nth-child(1), td:nth-child(4) { text-align: center; }
+          td:nth-child(5), td:nth-child(6), th:nth-child(5), th:nth-child(6) { text-align: right; }
+          td span { color: #8E8E93; font-size: 10px; }
+          .summary { display: flex; justify-content: flex-end; margin-top: 24px; }
+          .summary table { width: 310px; }
+          .summary td { border: 0; padding: 7px 8px; }
+          .grand td { border-top: 1px solid #701122; color: #701122; font-size: 16px; font-weight: bold; padding-top: 12px; }
+          .footer { border-top: 1px solid #ECEAE6; color: #8E8E93; font-size: 11px; margin-top: 44px; padding-top: 18px; text-align: center; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="brand">
+            <img src="${window.location.origin}/logo.png" alt="Mradhul Fashion" />
+            <div class="brand-title">Mradhul Fashion<span class="brand-sub">Jaipur Luxury Ethnic</span></div>
+          </div>
+          <div>
+            <div class="invoice-title">Tax Invoice / Receipt</div>
+            <div class="muted">Invoice No: <strong>${invoiceNumber}</strong><br/>Date: ${formatDate(order.paidAt || order.createdAt)}</div>
+          </div>
+        </div>
+        <div class="meta">
+          <div><strong>Order ID</strong>${order._id}</div>
+          <div><strong>Customer</strong>${customerName}</div>
+          <div><strong>Payment</strong>${order.paymentMethod} / ${order.isPaid ? 'Paid' : 'Pending'}</div>
+          <div><strong>GST</strong>CGST / SGST placeholders</div>
+        </div>
+        <div class="addresses">
+          <div class="panel"><span class="panel-title">Company</span><strong>Mradhul Fashion</strong><br/>Johri Bazar, Old City Sector 4<br/>Jaipur, Rajasthan - 302003<br/>GSTIN: To be updated</div>
+          <div class="panel"><span class="panel-title">Billing Address</span><strong>${customerName}</strong><br/>${customerEmail}<br/>${address.streetAddress}<br/>${address.city}, ${address.state} - ${address.postalCode}</div>
+          <div class="panel"><span class="panel-title">Seller / Shipping Address</span><strong>${sellerName}</strong><br/>Ship to: ${address.name}<br/>${address.streetAddress}<br/>${address.city}, ${address.state} - ${address.postalCode}<br/>Phone: ${address.phone}</div>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Product</th><th>Size</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+          <tbody>${itemsRows}</tbody>
+        </table>
+        <div class="summary">
+          <table>
+            <tr><td>Subtotal</td><td>Rs. ${order.itemsPrice || order.totalPrice}</td></tr>
+            <tr><td>Shipping</td><td>Rs. ${order.shippingPrice || 0}</td></tr>
+            <tr><td>Taxes / GST</td><td>Rs. ${order.taxPrice || 0}</td></tr>
+            <tr class="grand"><td>Grand Total</td><td>Rs. ${order.totalPrice}</td></tr>
+          </table>
+        </div>
+        <div class="muted" style="margin-top: 32px;">
+          Payment Method: ${order.paymentMethod}<br/>
+          Order Date: ${formatDate(order.createdAt)}<br/>
+          Paid At: ${formatDate(order.paidAt)}<br/>
+          Generated On: ${formatDate(new Date())}
+        </div>
+        <div class="footer">Thank you for choosing Mradhul Fashion. For support, email support@mradhulfashion.com.</div>
+        <script>window.onload = function() { window.print(); };</script>
       </body>
       </html>
     `;
@@ -860,7 +968,7 @@ function ProfilePageContent() {
 
                             <div className="flex flex-wrap items-center gap-3 border-t border-black/5 dark:border-white/5 pt-4 mt-2">
                               <button
-                                onClick={() => handlePrintInvoice(order)}
+                                onClick={() => handlePrintPremiumInvoice(order)}
                                 className="border border-brand-primary text-brand-primary hover:bg-brand-primary/5 text-[10px] font-bold uppercase tracking-wider py-1.5 px-4 rounded-xl transition-all"
                               >
                                 Print Invoice
@@ -884,6 +992,27 @@ function ProfilePageContent() {
                                 </button>
                               )}
                             </div>
+
+                            {order.returnRequest && (
+                              <div className="bg-brand-gold/10 p-4 rounded-xl border border-brand-gold/20 text-xs mt-3">
+                                <div className="font-bold text-brand-primary uppercase tracking-wider mb-2">
+                                  Return Status: {order.returnRequest.status || 'Requested'}
+                                </div>
+                                <p className="text-gray-700">
+                                  <span className="font-semibold">Reason:</span> {order.returnRequest.reason || 'N/A'}
+                                </p>
+                                {order.returnRequest.description && (
+                                  <p className="text-gray-600 mt-1">
+                                    <span className="font-semibold">Description:</span> {order.returnRequest.description}
+                                  </p>
+                                )}
+                                {order.returnRequest.requestedAt && (
+                                  <p className="text-gray-500 mt-1">
+                                    Requested on {formatDate(order.returnRequest.requestedAt)}
+                                  </p>
+                                )}
+                              </div>
+                            )}
 
                             {cancellingOrderId === order._id && (
                               <div className="bg-[#FAF7F2] p-4 rounded-xl border border-brand-primary/20 flex flex-col gap-3 mt-3">

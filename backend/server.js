@@ -16,6 +16,7 @@ const couponRoutes = require('./routes/couponRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const webhookRoutes = require('./routes/webhookRoutes');
+const newsletterRoutes = require('./routes/newsletterRoutes');
 
 
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/newsletter', newsletterRoutes);
 
 // Error Handling Middlewares
 app.use((req, res, next) => {
