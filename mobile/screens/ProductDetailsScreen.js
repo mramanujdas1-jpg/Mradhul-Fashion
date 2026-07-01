@@ -31,7 +31,10 @@ export default function ProductDetailsScreen({ route, navigation }) {
           if (data.product.sizes && data.product.sizes.length) {
             setSelectedSize(data.product.sizes[0]);
           }
-          if (data.product.colors && data.product.colors.length) {
+          const variants = data.product.variantImages?.filter(variant => variant.color && variant.images?.length) || [];
+          if (variants.length) {
+            setSelectedColor(variants[0].color);
+          } else if (data.product.colors && data.product.colors.length) {
             setSelectedColor(data.product.colors[0]);
           }
         } else {
@@ -69,14 +72,37 @@ export default function ProductDetailsScreen({ route, navigation }) {
   const discountPercent = product.discountPrice
     ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
     : 0;
+  const colorVariants = product.variantImages?.filter(variant => variant.color && variant.images?.length) || [];
+  const availableColors = colorVariants.length ? colorVariants.map(variant => variant.color) : (product.colors || []);
+  const selectedVariant = colorVariants.find(variant => variant.color === selectedColor);
+  const displayImages = selectedVariant?.images?.length ? selectedVariant.images : (product.images || []);
+  const hasStockValue = (value) => value !== undefined && value !== null && value !== '';
+  const getStockForSelection = (size = selectedSize) => {
+    const stockCandidates = [];
+    if (hasStockValue(product.stock)) stockCandidates.push(Number(product.stock));
+    if (size && hasStockValue(product.stockPerSize?.[size])) stockCandidates.push(Number(product.stockPerSize[size]));
+    if (selectedVariant && hasStockValue(selectedVariant.stock)) stockCandidates.push(Number(selectedVariant.stock));
+    if (selectedVariant && size && hasStockValue(selectedVariant.stockPerSize?.[size])) stockCandidates.push(Number(selectedVariant.stockPerSize[size]));
+    const numericStock = stockCandidates.filter(value => Number.isFinite(value));
+    return numericStock.length ? Math.min(...numericStock) : 0;
+  };
 
   const handleAddToCart = () => {
     if (!selectedSize) {
       Alert.alert('Select Size', 'Please select a size before adding to cart.');
       return;
     }
-    addToCart(product, selectedSize);
-    Alert.alert('Added to Bag', `${product.name} (Size: ${selectedSize}) has been added to your shopping bag.`);
+    if (availableColors.length > 0 && !selectedColor) {
+      Alert.alert('Select Color', 'Please select a color before adding to cart.');
+      return;
+    }
+    const availableStock = getStockForSelection(selectedSize);
+    if (availableStock <= 0) {
+      Alert.alert('Out of Stock', 'This color and size combination is currently unavailable.');
+      return;
+    }
+    addToCart(product, selectedSize, 1, selectedColor || '', displayImages[0] || product.images?.[0]);
+    Alert.alert('Added to Bag', `${product.name} (${selectedColor ? `Color: ${selectedColor}, ` : ''}Size: ${selectedSize}) has been added to your shopping bag.`);
   };
 
   const handleToggleWishlist = () => {
@@ -175,7 +201,7 @@ export default function ProductDetailsScreen({ route, navigation }) {
             }}
             scrollEventThrottle={16}
           >
-            {product.images.map((imgUrl, idx) => (
+            {displayImages.map((imgUrl, idx) => (
               <Image key={idx} source={{ uri: imgUrl.startsWith('http') ? imgUrl : 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=800' }} style={styles.productImage} />
             ))}
           </ScrollView>
@@ -186,9 +212,9 @@ export default function ProductDetailsScreen({ route, navigation }) {
           </TouchableOpacity>
           
           {/* Indicator dots */}
-          {product.images.length > 1 && (
+          {displayImages.length > 1 && (
             <View style={styles.indicatorContainer}>
-              {product.images.map((_, idx) => (
+              {displayImages.map((_, idx) => (
                 <View
                   key={idx}
                   style={[
@@ -229,30 +255,34 @@ export default function ProductDetailsScreen({ route, navigation }) {
         <View style={styles.divider} />
 
         {/* Color Selection */}
-        {product.colors && product.colors.length > 0 && (
+        {availableColors.length > 0 && (
           <View style={styles.colorSection}>
             <Text style={styles.sectionTitle}>Select Color</Text>
             <View style={styles.colorsList}>
-              {product.colors.map((color) => {
+              {availableColors.map((color) => {
                 const isSelected = selectedColor === color;
                 return (
                   <TouchableOpacity
                     key={color}
                     style={[
                       styles.colorCircle,
-                      { backgroundColor: color },
                       isSelected && styles.colorCircleSelected
                     ]}
-                    onPress={() => setSelectedColor(color)}
+                    onPress={() => {
+                      setSelectedColor(color);
+                      setActiveImageIdx(0);
+                    }}
                     title={color}
-                  />
+                  >
+                    <Text style={[styles.colorLabel, isSelected && styles.colorLabelSelected]}>{color}</Text>
+                  </TouchableOpacity>
                 );
               })}
             </View>
           </View>
         )}
 
-        {product.colors && product.colors.length > 0 && <View style={styles.divider} />}
+        {availableColors.length > 0 && <View style={styles.divider} />}
 
         {/* Size Selection */}
         <View style={styles.sizeSection}>
@@ -647,16 +677,31 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   colorCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    minWidth: 64,
+    minHeight: 34,
+    borderRadius: 17,
+    paddingHorizontal: 12,
     marginRight: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)'
+    borderColor: 'rgba(0,0,0,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF'
   },
   colorCircleSelected: {
-    borderWidth: 3,
-    borderColor: '#701122'
+    borderWidth: 2,
+    borderColor: '#701122',
+    backgroundColor: '#FAF7F2'
+  },
+  colorLabel: {
+    fontSize: 11,
+    color: '#554448',
+    fontWeight: '600'
+  },
+  colorLabelSelected: {
+    color: '#701122',
+    fontWeight: 'bold'
   },
   sizeSection: {
     paddingHorizontal: 20

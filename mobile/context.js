@@ -143,10 +143,10 @@ export function MobileProvider({ children }) {
   };
 
   // Cart operations
-  const addToCart = (product, size = 'M', qty = 1) => {
+  const addToCart = (product, size = 'M', qty = 1, color = '', image = '') => {
     setCart((prevCart) => {
       const existingIdx = prevCart.findIndex(
-        (item) => item.product === product._id && item.size === size
+        (item) => item.product === product._id && item.size === size && (item.color || '') === (color || '')
       );
       let updated;
       if (existingIdx > -1) {
@@ -159,9 +159,10 @@ export function MobileProvider({ children }) {
             product: product._id,
             name: product.name,
             qty,
-            image: product.images[0],
+            image: image || product.images[0],
             price: product.discountPrice || product.price,
-            size
+            size,
+            color
           }
         ];
       }
@@ -173,9 +174,9 @@ export function MobileProvider({ children }) {
     });
   };
 
-  const removeFromCart = (productId, size) => {
+  const removeFromCart = (productId, size, color = '') => {
     setCart((prevCart) => {
-      const updated = prevCart.filter((item) => !(item.product === productId && item.size === size));
+      const updated = prevCart.filter((item) => !(item.product === productId && item.size === size && (item.color || '') === (color || '')));
       if (user) {
         syncCartToDatabase(updated, user.token);
       }
@@ -184,14 +185,14 @@ export function MobileProvider({ children }) {
     });
   };
 
-  const updateCartQty = (productId, size, qty) => {
+  const updateCartQty = (productId, size, qty, color = '') => {
     if (qty <= 0) {
-      removeFromCart(productId, size);
+      removeFromCart(productId, size, color);
       return;
     }
     setCart((prevCart) => {
       const updated = prevCart.map((item) =>
-        item.product === productId && item.size === size ? { ...item, qty } : item
+        item.product === productId && item.size === size && (item.color || '') === (color || '') ? { ...item, qty } : item
       );
       if (user) {
         syncCartToDatabase(updated, user.token);

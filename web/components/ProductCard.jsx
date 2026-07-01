@@ -31,7 +31,8 @@ export default function ProductCard({ product }) {
     e.stopPropagation();
     // Default size selection is M or Free Size if not specified
     const selectedSize = product.sizes && product.sizes.length > 0 ? product.sizes[0] : 'M';
-    addToCart(product, selectedSize, 1);
+    const firstVariant = product.variantImages?.find(variant => variant.color && variant.images?.length);
+    addToCart(product, selectedSize, 1, firstVariant?.color || '', firstVariant?.images?.[0] || product.images?.[0]);
   };
 
   return (

@@ -24,7 +24,9 @@ router.post('/sync', protect, async (req, res) => {
       clientCart.forEach(clientItem => {
         if (!clientItem.product) return;
         const existingIdx = user.cart.findIndex(
-          dbItem => dbItem.product.toString() === clientItem.product.toString() && dbItem.size === clientItem.size
+          dbItem => dbItem.product.toString() === clientItem.product.toString()
+            && dbItem.size === clientItem.size
+            && (dbItem.color || '') === (clientItem.color || '')
         );
         if (existingIdx > -1) {
           user.cart[existingIdx].qty = Math.max(user.cart[existingIdx].qty, clientItem.qty);
@@ -32,7 +34,8 @@ router.post('/sync', protect, async (req, res) => {
           user.cart.push({
             product: clientItem.product,
             qty: clientItem.qty,
-            size: clientItem.size
+            size: clientItem.size,
+            color: clientItem.color || ''
           });
         }
       });
@@ -52,9 +55,12 @@ router.post('/sync', protect, async (req, res) => {
         product: item.product._id,
         name: item.product.name,
         qty: item.qty,
-        image: item.product.images[0],
+        image: item.color
+          ? ((item.product.variantImages || []).find(variant => variant.color === item.color)?.images?.[0] || item.product.images[0])
+          : item.product.images[0],
         price: item.product.discountPrice || item.product.price,
-        size: item.size
+        size: item.size,
+        color: item.color || ''
       };
     }).filter(Boolean);
 
@@ -80,7 +86,8 @@ router.post('/cart', protect, async (req, res) => {
       req.user.cart = cart.map(item => ({
         product: item.product,
         qty: item.qty,
-        size: item.size
+        size: item.size,
+        color: item.color || ''
       }));
       await req.user.save();
     }

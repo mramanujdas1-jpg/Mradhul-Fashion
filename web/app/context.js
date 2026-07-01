@@ -224,10 +224,10 @@ export function AppProvider({ children }) {
   };
 
   // Add Item to Cart
-  const addToCart = (product, size = 'M', qty = 1) => {
+  const addToCart = (product, size = 'M', qty = 1, color = '', image = '') => {
     setCart((prevCart) => {
       const existingItemIndex = prevCart.findIndex(
-        (item) => item.product === product._id && item.size === size
+        (item) => item.product === product._id && item.size === size && (item.color || '') === (color || '')
       );
 
       let newCart;
@@ -241,9 +241,10 @@ export function AppProvider({ children }) {
             product: product._id,
             name: product.name,
             qty,
-            image: product.images[0],
+            image: image || product.images?.[0],
             price: product.discountPrice || product.price,
-            size
+            size,
+            color
           }
         ];
       }
@@ -255,10 +256,10 @@ export function AppProvider({ children }) {
   };
 
   // Remove Item from Cart
-  const removeFromCart = (productId, size) => {
+  const removeFromCart = (productId, size, color = '') => {
     setCart((prevCart) => {
       const newCart = prevCart.filter(
-        (item) => !(item.product === productId && item.size === size)
+        (item) => !(item.product === productId && item.size === size && (item.color || '') === (color || ''))
       );
       localStorage.setItem('mf_cart', JSON.stringify(newCart));
       syncCartToDatabase(newCart);
@@ -267,14 +268,14 @@ export function AppProvider({ children }) {
   };
 
   // Update Cart Quantity
-  const updateCartQty = (productId, size, qty) => {
+  const updateCartQty = (productId, size, qty, color = '') => {
     if (qty <= 0) {
-      removeFromCart(productId, size);
+      removeFromCart(productId, size, color);
       return;
     }
     setCart((prevCart) => {
       const newCart = prevCart.map((item) =>
-        item.product === productId && item.size === size ? { ...item, qty } : item
+        item.product === productId && item.size === size && (item.color || '') === (color || '') ? { ...item, qty } : item
       );
       localStorage.setItem('mf_cart', JSON.stringify(newCart));
       syncCartToDatabase(newCart);

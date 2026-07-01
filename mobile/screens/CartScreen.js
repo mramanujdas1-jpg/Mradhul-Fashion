@@ -144,26 +144,27 @@ export default function CartScreen({ navigation }) {
             {item.name}
           </Text>
           <Text style={styles.itemSize}>Size: {item.size}</Text>
+          {item.color ? <Text style={styles.itemSize}>Color: {item.color}</Text> : null}
           <Text style={styles.itemPrice}>₹{item.price}</Text>
 
           {/* Quantity Controls */}
           <View style={styles.qtyRow}>
             <TouchableOpacity
               style={styles.qtyBtn}
-              onPress={() => updateCartQty(item.product, item.size, item.qty - 1)}
+              onPress={() => updateCartQty(item.product, item.size, item.qty - 1, item.color || '')}
             >
               <Text style={styles.qtyBtnText}>-</Text>
             </TouchableOpacity>
             <Text style={styles.qtyVal}>{item.qty}</Text>
             <TouchableOpacity
               style={styles.qtyBtn}
-              onPress={() => updateCartQty(item.product, item.size, item.qty + 1)}
+              onPress={() => updateCartQty(item.product, item.size, item.qty + 1, item.color || '')}
             >
               <Text style={styles.qtyBtnText}>+</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.removeBtn}
-              onPress={() => removeFromCart(item.product, item.size)}
+              onPress={() => removeFromCart(item.product, item.size, item.color || '')}
             >
               <Text style={styles.removeBtnText}>Remove</Text>
             </TouchableOpacity>
@@ -196,7 +197,7 @@ export default function CartScreen({ navigation }) {
         <FlatList
           data={cart}
           renderItem={renderCartItem}
-          keyExtractor={(item, index) => `${item.product}-${item.size}-${index}`}
+          keyExtractor={(item, index) => `${item.product}-${item.size}-${item.color || 'default'}-${index}`}
           scrollEnabled={false}
           style={styles.itemList}
         />

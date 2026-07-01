@@ -12,7 +12,7 @@ const buildStockIncrement = (items, direction, includeSizeStock = true) => {
     if (includeSizeStock && item.size) {
       incPayload[`stockPerSize.${item.size}`] = direction * item.qty;
     }
-    updates.push({ product: item.product, incPayload });
+    updates.push({ product: item.product, color: item.color, size: item.size, qty: item.qty, incPayload });
   });
   return updates;
 };
@@ -21,15 +21,35 @@ const applyStockUpdates = async (items, direction, includeSizeStock = true) => {
   const updates = buildStockIncrement(items, direction, includeSizeStock);
   for (const update of updates) {
     await Product.findByIdAndUpdate(update.product, { $inc: update.incPayload });
+    if (update.color) {
+      await Product.updateOne(
+        {
+          _id: update.product,
+          variantImages: { $elemMatch: { color: update.color, stock: { $exists: true } } }
+        },
+        { $inc: { 'variantImages.$.stock': direction * update.qty } }
+      );
+      if (includeSizeStock && update.size) {
+        await Product.updateOne(
+          {
+            _id: update.product,
+            variantImages: { $elemMatch: { color: update.color, [`stockPerSize.${update.size}`]: { $exists: true } } }
+          },
+          { $inc: { [`variantImages.$.stockPerSize.${update.size}`]: direction * update.qty } }
+        );
+      }
+    }
   }
 };
 
 const restoreOrderStock = async (order) => {
+  if (order.stockRestoredAt) return;
   const shouldRestoreStock = order.inventoryReserved || order.paymentMethod === 'COD' || order.isPaid;
   if (!shouldRestoreStock) return;
 
   const includeSizeStock = order.inventoryReserved || order.paymentMethod === 'COD';
   await applyStockUpdates(order.orderItems, 1, includeSizeStock);
+  order.stockRestoredAt = new Date();
 };
 
 let razorpayInstance;
@@ -68,9 +88,29 @@ router.post('/', protect, async (req, res) => {
       if (!product) {
         return res.status(404).json({ message: `Product not found: ${item.name || item.product}` });
       }
-      if (product.stock < item.qty) {
+      const variant = item.color
+        ? (product.variantImages || []).find(v => v.color === item.color)
+        : null;
+      const sizeStock = item.size && product.stockPerSize?.get(item.size) !== undefined
+        ? product.stockPerSize.get(item.size)
+        : undefined;
+      const variantStock = variant && variant.stock !== undefined && variant.stock !== null
+        ? variant.stock
+        : undefined;
+      const variantSizeStock = variant && item.size && variant.stockPerSize?.get(item.size) !== undefined
+        ? variant.stockPerSize.get(item.size)
+        : undefined;
+      const stockChecks = [
+        product.stock,
+        sizeStock,
+        variantStock,
+        variantSizeStock
+      ].filter(value => value !== undefined && value !== null);
+      const availableStock = Math.min(...stockChecks);
+
+      if (availableStock < item.qty) {
         return res.status(400).json({
-          message: `${product.name} has only ${product.stock} item${product.stock === 1 ? '' : 's'} available.`
+          message: `${product.name}${item.color ? ` (${item.color})` : ''} has only ${availableStock} item${availableStock === 1 ? '' : 's'} available.`
         });
       }
 
@@ -83,9 +123,10 @@ router.post('/', protect, async (req, res) => {
         product: item.product,
         name: product.name,
         qty: item.qty,
-        image: product.images[0] || item.image || '/logo.png',
+        image: item.image || variant?.images?.[0] || product.images[0] || '/logo.png',
         price: item.price,
-        size: item.size
+        size: item.size,
+        color: item.color
       });
     }
 
@@ -302,6 +343,26 @@ router.put('/:id/status', protect, async (req, res) => {
       // Enforce seller/admin isolation
       if (req.user.role !== 'admin' && order.seller.toString() !== req.user._id.toString()) {
         return res.status(403).json({ message: 'Not authorized to modify this order.' });
+      }
+
+      if (status === 'Cancelled') {
+        if (!['Pending', 'Processing'].includes(order.status)) {
+          return res.status(400).json({ message: 'Order cannot be cancelled after shipment.' });
+        }
+
+        order.cancelledAt = new Date();
+        order.cancellationReason = description || 'Cancelled by store team';
+        await restoreOrderStock(order);
+        order.inventoryReserved = false;
+      }
+
+      if (status === 'Returned') {
+        if (!['Delivered', 'Return Requested'].includes(order.status)) {
+          return res.status(400).json({ message: 'Order can only be marked returned after delivery or return request.' });
+        }
+
+        await restoreOrderStock(order);
+        order.inventoryReserved = false;
       }
 
       order.status = status;

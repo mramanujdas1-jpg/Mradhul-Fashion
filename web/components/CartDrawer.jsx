@@ -110,7 +110,7 @@ export default function CartDrawer() {
             </div>
           ) : (
             cart.map((item) => (
-              <div key={`${item.product}-${item.size}`} className="flex gap-4 group">
+              <div key={`${item.product}-${item.size}-${item.color || 'default'}`} className="flex gap-4 group">
                 <Link 
                   href={`/products/${item.product}`} 
                   onClick={() => setCartOpen(false)}
@@ -129,7 +129,7 @@ export default function CartDrawer() {
                       {item.name}
                     </Link>
                     <button 
-                      onClick={() => removeFromCart(item.product, item.size)}
+                      onClick={() => removeFromCart(item.product, item.size, item.color || '')}
                       className="text-gray-400 hover:text-red-500 transition-colors p-1"
                     >
                       <Trash2 size={16} />
@@ -137,18 +137,21 @@ export default function CartDrawer() {
                   </div>
                   
                   <div className="text-xs text-gray-500 mt-1">Size: <span className="font-semibold text-gray-700 dark:text-gray-300">{item.size}</span></div>
+                  {item.color && (
+                    <div className="text-xs text-gray-500 mt-0.5">Color: <span className="font-semibold text-gray-700 dark:text-gray-300">{item.color}</span></div>
+                  )}
                   
                   <div className="mt-auto flex items-center justify-between">
                     <div className="flex items-center border border-gray-200 dark:border-[#444] rounded-md h-8">
                       <button 
-                        onClick={() => updateCartQty(item.product, item.size, item.qty - 1)}
+                        onClick={() => updateCartQty(item.product, item.size, item.qty - 1, item.color || '')}
                         className="px-2.5 h-full text-gray-500 hover:bg-gray-100 dark:hover:bg-[#333] transition-colors"
                       >
                         <Minus size={12} />
                       </button>
                       <span className="px-2 text-xs font-semibold w-8 text-center">{item.qty}</span>
                       <button 
-                        onClick={() => updateCartQty(item.product, item.size, item.qty + 1)}
+                        onClick={() => updateCartQty(item.product, item.size, item.qty + 1, item.color || '')}
                         className="px-2.5 h-full text-gray-500 hover:bg-gray-100 dark:hover:bg-[#333] transition-colors"
                       >
                         <Plus size={12} />

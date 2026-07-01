@@ -638,13 +638,15 @@ export default function CheckoutPage() {
               </h4>
               <div className="flex flex-col gap-4 max-h-[300px] overflow-y-auto pr-2">
                 {cart.map((item, idx) => (
-                  <div key={idx} className="flex gap-3">
+                  <div key={`${item.product}-${item.size}-${item.color || 'default'}-${idx}`} className="flex gap-3">
                     <div className="w-16 h-20 bg-gray-100 shrink-0 rounded overflow-hidden border border-gray-200 dark:border-[#333]">
                       <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-900 dark:text-white line-clamp-1">{item.name}</span>
-                      <span className="text-xs text-gray-500 mt-1">Size: {item.size} | Qty: {item.qty}</span>
+                      <span className="text-xs text-gray-500 mt-1">
+                        Size: {item.size}{item.color ? ` | Color: ${item.color}` : ''} | Qty: {item.qty}
+                      </span>
                       <span className="text-sm font-bold mt-auto text-gray-900 dark:text-white">₹{item.price * item.qty}</span>
                     </div>
                   </div>

@@ -167,7 +167,9 @@ export default function AdminOrdersPage() {
                               <img src={item.image} alt={item.name} className="h-10 w-8 object-cover rounded" />
                               <div className="flex-grow">
                                 <span className="font-medium block truncate max-w-[12rem]">{item.name}</span>
-                                <span className="text-[10px] text-gray-400 font-light">Qty: {item.qty} | Size: {item.size}</span>
+                                <span className="text-[10px] text-gray-400 font-light">
+                                  Qty: {item.qty} | Size: {item.size}{item.color ? ` | Color: ${item.color}` : ''}
+                                </span>
                               </div>
                               <span className="font-bold">₹{item.price * item.qty}</span>
                             </div>
@@ -193,7 +195,8 @@ export default function AdminOrdersPage() {
                           <option value="Shipped">Shipped (Dispatched to carrier)</option>
                           <option value="Out For Delivery">Out For Delivery (Arrived at local hub)</option>
                           <option value="Delivered">Delivered (Handed to customer)</option>
-                          <option value="Cancelled">Cancelled (Returned/Declined)</option>
+                          <option value="Returned">Returned (Stock restored)</option>
+                          <option value="Cancelled">Cancelled (Declined before shipment)</option>
                         </select>
                       </div>
 

@@ -38,7 +38,8 @@ const userSchema = new mongoose.Schema({
   cart: [{
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
     qty: { type: Number, required: true, default: 1 },
-    size: { type: String, required: true }
+    size: { type: String, required: true },
+    color: { type: String }
   }],
   fcmTokens: [{ type: String }]
 }, { timestamps: true });
@@ -70,7 +71,13 @@ const productSchema = new mongoose.Schema({
   images: [{ type: String, required: true }],
   variantImages: [{
     color: { type: String },
-    images: [{ type: String }]
+    images: [{ type: String }],
+    stock: { type: Number },
+    stockPerSize: {
+      type: Map,
+      of: Number,
+      default: {}
+    }
   }],
   sizes: [{ type: String }], // List of all sizes
   colors: [{ type: String }],
@@ -148,7 +155,8 @@ const orderSchema = new mongoose.Schema({
     qty: { type: Number, required: true },
     image: { type: String, required: true },
     price: { type: Number, required: true },
-    size: { type: String, required: true }
+    size: { type: String, required: true },
+    color: { type: String }
   }],
   shippingAddress: {
     name: { type: String, required: true },
@@ -174,6 +182,7 @@ const orderSchema = new mongoose.Schema({
   isDelivered: { type: Boolean, default: false },
   deliveredAt: { type: Date },
   inventoryReserved: { type: Boolean, default: false },
+  stockRestoredAt: { type: Date },
   cancelledAt: { type: Date },
   cancellationReason: { type: String },
   returnRequest: returnRequestSchema,

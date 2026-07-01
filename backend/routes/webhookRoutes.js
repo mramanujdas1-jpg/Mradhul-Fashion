@@ -83,6 +83,24 @@ router.post('/razorpay', async (req, res) => {
               await require('../models').Product.findByIdAndUpdate(item.product, {
                 $inc: incPayload
               });
+              if (item.color) {
+                await require('../models').Product.updateOne(
+                  {
+                    _id: item.product,
+                    variantImages: { $elemMatch: { color: item.color, stock: { $exists: true } } }
+                  },
+                  { $inc: { 'variantImages.$.stock': -item.qty } }
+                );
+                if (item.size) {
+                  await require('../models').Product.updateOne(
+                    {
+                      _id: item.product,
+                      variantImages: { $elemMatch: { color: item.color, [`stockPerSize.${item.size}`]: { $exists: true } } }
+                    },
+                    { $inc: { [`variantImages.$.stockPerSize.${item.size}`]: -item.qty } }
+                  );
+                }
+              }
             }
             console.log(`Order ${order._id} marked as paid via webhook.`);
           }

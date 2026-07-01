@@ -116,7 +116,7 @@ export default function CartPage() {
         <div className="lg:col-span-2 flex flex-col gap-4">
           {cart.map((item) => (
             <div
-              key={`${item.product}-${item.size}`}
+              key={`${item.product}-${item.size}-${item.color || 'default'}`}
               className="flex items-center gap-4 bg-white dark:bg-brand-charcoal p-4 rounded-2xl border border-brand-primary/5 shadow-sm hover:shadow-md transition-shadow"
             >
               {/* Product item image */}
@@ -131,6 +131,7 @@ export default function CartPage() {
                 </h3>
                 <div className="flex items-center gap-4 text-xs text-gray-500 font-medium">
                   <span>Size: <strong className="text-brand-gold uppercase">{item.size}</strong></span>
+                  {item.color && <span>Color: <strong className="text-brand-gold uppercase">{item.color}</strong></span>}
                   <span>Price: <strong className="text-gray-700 dark:text-gray-300">₹{item.price}</strong></span>
                 </div>
 
@@ -138,14 +139,14 @@ export default function CartPage() {
                 <div className="flex items-center gap-2 mt-2">
                   <div className="flex items-center border border-black/10 dark:border-white/10 rounded-lg overflow-hidden h-7 text-xs">
                     <button
-                      onClick={() => updateCartQty(item.product, item.size, item.qty - 1)}
+                      onClick={() => updateCartQty(item.product, item.size, item.qty - 1, item.color || '')}
                       className="px-2 hover:bg-black/5 dark:hover:bg-white/5"
                     >
                       -
                     </button>
                     <span className="px-3 font-semibold">{item.qty}</span>
                     <button
-                      onClick={() => updateCartQty(item.product, item.size, item.qty + 1)}
+                      onClick={() => updateCartQty(item.product, item.size, item.qty + 1, item.color || '')}
                       className="px-2 hover:bg-black/5 dark:hover:bg-white/5"
                     >
                       +
@@ -153,7 +154,7 @@ export default function CartPage() {
                   </div>
 
                   <button
-                    onClick={() => removeFromCart(item.product, item.size)}
+                    onClick={() => removeFromCart(item.product, item.size, item.color || '')}
                     className="p-1.5 hover:text-brand-primary text-gray-400 rounded-md hover:bg-brand-primary/5 transition-colors ml-2"
                     aria-label="Delete item from cart"
                   >

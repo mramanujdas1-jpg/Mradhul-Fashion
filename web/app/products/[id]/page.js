@@ -39,6 +39,30 @@ export default function ProductDetails({ params }) {
   const [touchStartX, setTouchStartX] = useState(null);
 
   const isWishlisted = product && wishlist.some((item) => item._id === product._id);
+  const colorVariants = product?.variantImages?.filter(variant => variant.color && variant.images?.length) || [];
+  const availableColors = colorVariants.length
+    ? colorVariants.map(variant => variant.color)
+    : (product?.colors || []);
+  const selectedVariant = colorVariants.find(variant => variant.color === selectedColor);
+  const displayImages = selectedVariant?.images?.length ? selectedVariant.images : (product?.images || []);
+  const hasStockValue = (value) => value !== undefined && value !== null && value !== '';
+  const getStockForSelection = (size = selectedSize) => {
+    if (!product) return 0;
+    const stockCandidates = [];
+    if (hasStockValue(product.stock)) stockCandidates.push(Number(product.stock));
+    if (size && hasStockValue(product.stockPerSize?.[size])) {
+      stockCandidates.push(Number(product.stockPerSize[size]));
+    }
+    if (selectedVariant && hasStockValue(selectedVariant.stock)) {
+      stockCandidates.push(Number(selectedVariant.stock));
+    }
+    if (selectedVariant && size && hasStockValue(selectedVariant.stockPerSize?.[size])) {
+      stockCandidates.push(Number(selectedVariant.stockPerSize[size]));
+    }
+    const numericStock = stockCandidates.filter(value => Number.isFinite(value));
+    return numericStock.length ? Math.min(...numericStock) : 0;
+  };
+  const selectedAvailableStock = getStockForSelection();
 
   // Load details
   const fetchProductDetails = async () => {
@@ -64,8 +88,12 @@ export default function ProductDetails({ params }) {
         setProduct(data.product);
         setReviews(data.reviews || []);
         
-        if (data.product.images && data.product.images.length > 0) {
-          setSelectedImage(data.product.images[0]);
+        const variants = data.product.variantImages?.filter(variant => variant.color && variant.images?.length) || [];
+        const firstVariant = variants[0];
+        const initialImages = firstVariant?.images?.length ? firstVariant.images : (data.product.images || []);
+
+        if (initialImages.length > 0) {
+          setSelectedImage(initialImages[0]);
         }
         
         if (data.product.sizes && data.product.sizes.length > 0) {
@@ -74,7 +102,9 @@ export default function ProductDetails({ params }) {
           setSelectedSize(availableSize || data.product.sizes[0]);
         }
         
-        if (data.product.colors && data.product.colors.length > 0) {
+        if (firstVariant?.color) {
+          setSelectedColor(firstVariant.color);
+        } else if (data.product.colors && data.product.colors.length > 0) {
           setSelectedColor(data.product.colors[0]);
         }
  
@@ -97,6 +127,22 @@ export default function ProductDetails({ params }) {
   useEffect(() => {
     fetchProductDetails();
   }, [productIdOrSlug]);
+
+  useEffect(() => {
+    if (displayImages.length > 0) {
+      setSelectedImage(displayImages[0]);
+      setViewerIndex(0);
+      setViewerZoomed(false);
+    }
+  }, [selectedColor, product?._id]);
+
+  useEffect(() => {
+    if (!product?.sizes?.length) return;
+    const currentStock = getStockForSelection(selectedSize);
+    if (selectedSize && currentStock > 0) return;
+    const availableSize = product.sizes.find(size => getStockForSelection(size) > 0);
+    setSelectedSize(availableSize || product.sizes[0]);
+  }, [selectedColor, product?._id]);
 
   useEffect(() => {
     if (!viewerOpen) return undefined;
@@ -134,15 +180,15 @@ export default function ProductDetails({ params }) {
   };
 
   const showNextImage = () => {
-    if (!product?.images?.length) return;
+    if (!displayImages.length) return;
     setViewerZoomed(false);
-    setViewerIndex((current) => (current + 1) % product.images.length);
+    setViewerIndex((current) => (current + 1) % displayImages.length);
   };
 
   const showPreviousImage = () => {
-    if (!product?.images?.length) return;
+    if (!displayImages.length) return;
     setViewerZoomed(false);
-    setViewerIndex((current) => (current - 1 + product.images.length) % product.images.length);
+    setViewerIndex((current) => (current - 1 + displayImages.length) % displayImages.length);
   };
 
   const handleViewerTouchEnd = (event) => {
@@ -164,11 +210,14 @@ export default function ProductDetails({ params }) {
       alert('Please select a size');
       return false;
     }
+    if (availableColors.length > 0 && !selectedColor) {
+      alert('Please select a color');
+      return false;
+    }
     
-    // Check stock for selected size
-    const availableStock = product.stockPerSize ? (product.stockPerSize[selectedSize] || 0) : product.stock;
+    const availableStock = getStockForSelection(selectedSize);
     if (availableStock < quantity) {
-      alert(`Only ${availableStock} items left for size ${selectedSize}`);
+      alert(`Only ${availableStock} item${availableStock === 1 ? '' : 's'} left for ${selectedColor ? `${selectedColor}, ` : ''}size ${selectedSize}`);
       return false;
     }
     return true;
@@ -176,7 +225,7 @@ export default function ProductDetails({ params }) {
 
   const handleAddToCart = () => {
     if (!validateCartAddition()) return;
-    addToCart(product, selectedSize, quantity);
+    addToCart(product, selectedSize, quantity, selectedColor || '', displayImages[0] || product.images?.[0]);
     setShowCartSuccess(true);
     setTimeout(() => {
       setShowCartSuccess(false);
@@ -185,7 +234,7 @@ export default function ProductDetails({ params }) {
 
   const handleBuyNow = () => {
     if (!validateCartAddition()) return;
-    addToCart(product, selectedSize, quantity);
+    addToCart(product, selectedSize, quantity, selectedColor || '', displayImages[0] || product.images?.[0]);
     router.push('/checkout');
   };
 
@@ -243,7 +292,7 @@ export default function ProductDetails({ params }) {
         {/* Left Side: Sticky Image Gallery Desktop */}
         <div className="lg:w-3/5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:sticky lg:top-24">
-            {product.images.map((img, idx) => (
+            {displayImages.map((img, idx) => (
               <button
                 key={idx}
                 type="button"
@@ -296,7 +345,7 @@ export default function ProductDetails({ params }) {
               </div>
               <div className="flex flex-wrap gap-3">
                 {product.sizes.map((size) => {
-                  const stock = product.stockPerSize ? (product.stockPerSize[size] || 0) : product.stock;
+                  const stock = getStockForSelection(size);
                   const isOutOfStock = stock <= 0;
                   const isSelected = selectedSize === size;
                   
@@ -317,27 +366,41 @@ export default function ProductDetails({ params }) {
                   );
                 })}
               </div>
-              {selectedSize && (product.stockPerSize?.[selectedSize] <= 5 && product.stockPerSize?.[selectedSize] > 0) && (
-                <p className="text-xs font-semibold text-red-500 animate-pulse">Only {product.stockPerSize[selectedSize]} left in stock for {selectedSize}</p>
+              {selectedSize && selectedAvailableStock <= 5 && selectedAvailableStock > 0 && (
+                <p className="text-xs font-semibold text-red-500 animate-pulse">
+                  Only {selectedAvailableStock} left in stock for {selectedColor ? `${selectedColor}, ` : ''}{selectedSize}
+                </p>
               )}
             </div>
           )}
 
           {/* Colors */}
-          {product.colors && product.colors.length > 0 && (
+          {availableColors.length > 0 && (
             <div className="flex flex-col gap-3 border-t border-gray-200 dark:border-[#333] pt-4">
               <span className="text-sm font-bold uppercase tracking-wider text-gray-900 dark:text-gray-100">Color Options</span>
               <div className="flex items-center gap-3">
-                {product.colors.map(color => (
+                {availableColors.map(color => (
                   <button
                     key={color}
-                    onClick={() => setSelectedColor(color)}
-                    className={`h-10 w-10 rounded-full border border-gray-300 p-0.5 transition-all ${selectedColor === color ? 'ring-2 ring-brand-primary border-transparent' : ''}`}
+                    onClick={() => {
+                      setSelectedColor(color);
+                      setViewerIndex(0);
+                    }}
+                    className={`min-h-10 rounded-full border px-4 py-2 text-xs font-bold transition-all ${
+                      selectedColor === color
+                        ? 'border-brand-primary text-brand-primary ring-2 ring-brand-primary/20'
+                        : 'border-gray-300 text-gray-600 hover:border-brand-primary dark:border-[#555] dark:text-gray-300'
+                    }`}
                   >
-                    <div className="w-full h-full rounded-full" style={{ backgroundColor: color }}></div>
+                    {color}
                   </button>
                 ))}
               </div>
+              {selectedVariant && (
+                <p className="text-xs text-gray-500">
+                  Showing {selectedVariant.images.length} image{selectedVariant.images.length === 1 ? '' : 's'} for {selectedVariant.color}.
+                </p>
+              )}
             </div>
           )}
 
@@ -428,7 +491,7 @@ export default function ProductDetails({ params }) {
         </div>
       </div>
 
-      {viewerOpen && product.images?.length > 0 && (
+      {viewerOpen && displayImages.length > 0 && (
         <div
           className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center px-4 py-8"
           onClick={closeImageViewer}
@@ -445,7 +508,7 @@ export default function ProductDetails({ params }) {
             <X size={22} />
           </button>
 
-          {product.images.length > 1 && (
+          {displayImages.length > 1 && (
             <>
               <button
                 type="button"
@@ -479,7 +542,7 @@ export default function ProductDetails({ params }) {
             onTouchEnd={handleViewerTouchEnd}
           >
             <img
-              src={product.images[viewerIndex]}
+              src={displayImages[viewerIndex]}
               alt={`${product.name} fullscreen view ${viewerIndex + 1}`}
               onClick={() => setViewerZoomed((value) => !value)}
               className={`mx-auto max-h-[82vh] select-none object-contain transition-transform duration-300 ${
@@ -490,7 +553,7 @@ export default function ProductDetails({ params }) {
           </div>
 
           <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white">
-            {viewerIndex + 1} / {product.images.length} - Click image to zoom
+            {viewerIndex + 1} / {displayImages.length} - Click image to zoom
           </div>
         </div>
       )}

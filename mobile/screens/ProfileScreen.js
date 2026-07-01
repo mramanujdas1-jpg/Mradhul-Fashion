@@ -260,7 +260,9 @@ export default function ProfileScreen({ navigation }) {
                       <Image source={{ uri: item.image }} style={styles.orderItemImage} />
                       <View style={{ flex: 1, marginLeft: 12 }}>
                         <Text style={styles.orderItemName} numberOfLines={1}>{item.name}</Text>
-                        <Text style={styles.orderItemMeta}>Qty: {item.qty} | Size: {item.size}</Text>
+                        <Text style={styles.orderItemMeta}>
+                          Qty: {item.qty} | Size: {item.size}{item.color ? ` | Color: ${item.color}` : ''}
+                        </Text>
                       </View>
                       <Text style={styles.orderItemPrice}>₹{item.price * item.qty}</Text>
                     </View>

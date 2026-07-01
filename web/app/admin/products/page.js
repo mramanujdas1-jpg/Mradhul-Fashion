@@ -56,6 +56,8 @@ export default function AdminProductsPage() {
 
   const [formImages, setFormImages] = useState([]);
   const [formColors, setFormColors] = useState('');
+  const [colorGalleries, setColorGalleries] = useState([]);
+  const [newColorName, setNewColorName] = useState('');
   
   // Stock per size: { 'S': 10, 'M': 5 }
   const [stockPerSize, setStockPerSize] = useState({});
@@ -111,6 +113,8 @@ export default function AdminProductsPage() {
     });
     setFormImages([]);
     setFormColors('');
+    setColorGalleries([]);
+    setNewColorName('');
     setStockPerSize({ 'S': 0, 'M': 0, 'L': 0 });
     setEditorOpen(true);
   };
@@ -138,6 +142,13 @@ export default function AdminProductsPage() {
     });
     setFormImages(prod.images || []);
     setFormColors((prod.colors || []).join(', '));
+    setColorGalleries((prod.variantImages || []).map(variant => ({
+      color: variant.color || '',
+      images: variant.images || [],
+      stock: variant.stock ?? '',
+      stockPerSize: variant.stockPerSize || {}
+    })).filter(variant => variant.color));
+    setNewColorName('');
     setStockPerSize(prod.stockPerSize || {});
     setEditorOpen(true);
   };
@@ -155,8 +166,15 @@ export default function AdminProductsPage() {
     }
   };
 
-  const handleImageUploads = async (e) => {
-    const files = Array.from(e.target.files);
+  const handleColorStockChange = (color, qty) => {
+    setColorGalleries(prev => prev.map(variant => (
+      variant.color === color
+        ? { ...variant, stock: qty === '' ? '' : (parseInt(qty) || 0) }
+        : variant
+    )));
+  };
+
+  const uploadFilesToCloudinary = async (files) => {
     if (files.length === 0) return;
 
     setUploading(true);
@@ -191,12 +209,45 @@ export default function AdminProductsPage() {
         }
       }
 
-      setFormImages(prev => [...prev, ...uploadedUrls]);
+      return uploadedUrls;
     } catch (err) {
       setErrorMsg(err.message || 'Failed to upload image.');
+      return [];
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleImageUploads = async (e) => {
+    const uploadedUrls = await uploadFilesToCloudinary(Array.from(e.target.files));
+    if (uploadedUrls?.length) {
+      setFormImages(prev => [...prev, ...uploadedUrls]);
+    }
+    e.target.value = '';
+  };
+
+  const handleColorImageUploads = async (color, e) => {
+    const uploadedUrls = await uploadFilesToCloudinary(Array.from(e.target.files));
+    if (uploadedUrls?.length) {
+      setColorGalleries(prev => prev.map(variant => (
+        variant.color === color
+          ? { ...variant, images: [...variant.images, ...uploadedUrls] }
+          : variant
+      )));
+    }
+    e.target.value = '';
+  };
+
+  const addColorGallery = () => {
+    const color = newColorName.trim();
+    if (!color) return;
+    if (colorGalleries.some(variant => variant.color.toLowerCase() === color.toLowerCase())) {
+      setErrorMsg('This color already exists.');
+      return;
+    }
+    setColorGalleries(prev => [...prev, { color, images: [], stock: '', stockPerSize: {} }]);
+    setNewColorName('');
+    setErrorMsg('');
   };
 
   const handleFormSubmit = async (e) => {
@@ -219,13 +270,37 @@ export default function AdminProductsPage() {
       }
     });
 
+    const variantImages = colorGalleries
+      .map(variant => {
+        const normalized = {
+          color: variant.color.trim(),
+          images: (variant.images || []).filter(Boolean),
+          stockPerSize: variant.stockPerSize || {}
+        };
+        if (variant.stock !== '' && variant.stock !== undefined && variant.stock !== null) {
+          normalized.stock = parseInt(variant.stock) || 0;
+        }
+        return normalized;
+      })
+      .filter(variant => variant.color && variant.images.length > 0);
+    if (variantImages.some(variant => variant.stock !== undefined)) {
+      totalStock = variantImages.reduce((acc, variant) => acc + (parseInt(variant.stock) || 0), 0);
+    }
+    const colors = variantImages.length
+      ? variantImages.map(variant => variant.color)
+      : (formColors ? formColors.split(',').map(c => c.trim()).filter(Boolean) : []);
+    const primaryImages = variantImages.length
+      ? variantImages.flatMap(variant => variant.images)
+      : formImages;
+
     const payload = {
       ...formData,
       price: Number(formData.price),
       discountPrice: formData.discountPrice ? Number(formData.discountPrice) : 0,
       tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      colors: formColors ? formColors.split(',').map(c => c.trim()).filter(Boolean) : [],
-      images: formImages.length ? formImages : ['/logo.png'],
+      colors,
+      images: primaryImages.length ? primaryImages : ['/logo.png'],
+      variantImages,
       stockPerSize,
       stock: totalStock,
       sizes: activeSizes.length > 0 ? activeSizes : ['Free Size'] // Default fallback
@@ -664,6 +739,87 @@ export default function AdminProductsPage() {
                       placeholder="e.g. Dry clean only"
                       className="w-full bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-[#333] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
                     />
+                  </div>
+
+                  <div className="border-t border-gray-100 dark:border-[#333] pt-4">
+                    <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Color Image Galleries</label>
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={newColorName}
+                        onChange={(e) => setNewColorName(e.target.value)}
+                        placeholder="Add color name e.g. Red, Green"
+                        className="flex-1 bg-gray-50 dark:bg-[#121212] border border-gray-200 dark:border-[#333] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={addColorGallery}
+                        className="bg-brand-primary text-white text-xs font-bold uppercase tracking-wider px-4 rounded-lg"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {colorGalleries.map((variant) => (
+                        <div key={variant.color} className="rounded-xl border border-gray-200 dark:border-[#333] p-3 bg-gray-50 dark:bg-[#121212]">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold text-brand-primary">{variant.color}</span>
+                            <button
+                              type="button"
+                              onClick={() => setColorGalleries(prev => prev.filter(item => item.color !== variant.color))}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <label className="mb-3 block">
+                            <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500">Color Stock</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={variant.stock ?? ''}
+                              onChange={(e) => handleColorStockChange(variant.color, e.target.value)}
+                              placeholder="Optional"
+                              className="w-36 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#333] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-primary"
+                            />
+                          </label>
+                          <div className="flex flex-wrap gap-3">
+                            {variant.images.map((img, idx) => (
+                              <div key={`${variant.color}-${idx}`} className="relative h-24 w-20 rounded-lg border border-gray-200 dark:border-[#333] overflow-hidden group">
+                                <img src={img} className="h-full w-full object-cover" alt="" />
+                                <button
+                                  type="button"
+                                  onClick={() => setColorGalleries(prev => prev.map(item => (
+                                    item.color === variant.color
+                                      ? { ...item, images: item.images.filter((_, imageIdx) => imageIdx !== idx) }
+                                      : item
+                                  )))}
+                                  className="absolute right-1 top-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            ))}
+                            <label className="h-24 w-20 rounded-lg border-2 border-dashed border-gray-300 dark:border-[#444] hover:border-brand-primary flex flex-col items-center justify-center cursor-pointer text-gray-400 hover:text-brand-primary transition-colors bg-white dark:bg-[#1E1E1E]">
+                              {uploading ? <RefreshCcw size={20} className="animate-spin" /> : <Plus size={20} />}
+                              <span className="text-[10px] mt-1 font-medium uppercase">Images</span>
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={(e) => handleColorImageUploads(variant.color, e)}
+                                className="hidden"
+                                disabled={uploading}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                      {colorGalleries.length === 0 && (
+                        <p className="text-xs text-gray-500">Add color galleries to show different images when customers select a color.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 

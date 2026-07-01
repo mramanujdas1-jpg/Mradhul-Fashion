@@ -104,10 +104,11 @@ function ProfilePageContent() {
         body: JSON.stringify({ reason: cancelReason })
       });
       if (res.ok) {
+        const updatedOrder = await res.json();
         setSuccessMsg('Order cancelled successfully.');
         setCancelReason('');
         setCancellingOrderId(null);
-        fetchMyOrders();
+        setOrders(prev => prev.map(order => order._id === updatedOrder._id ? updatedOrder : order));
       } else {
         const data = await res.json();
         setErrorMsg(data.message || 'Failed to cancel order.');
@@ -159,7 +160,7 @@ function ProfilePageContent() {
     const itemsRows = order.orderItems.map(item => `
       <tr style="border-bottom: 1px solid #ECEAE6;">
         <td style="padding: 12px 8px; font-weight: 500;">${item.name}</td>
-        <td style="padding: 12px 8px; color: #6C757D;">${item.size}</td>
+        <td style="padding: 12px 8px; color: #6C757D;">${item.size}${item.color ? `<br/><span style="font-size: 10px;">Color: ${item.color}</span>` : ''}</td>
         <td style="padding: 12px 8px; text-align: center;">${item.qty}</td>
         <td style="padding: 12px 8px; text-align: right; font-weight: 600;">₹${item.price}</td>
         <td style="padding: 12px 8px; text-align: right; font-weight: 600;">₹${item.price * item.qty}</td>
@@ -295,7 +296,7 @@ function ProfilePageContent() {
       <tr>
         <td>${index + 1}</td>
         <td><strong>${item.name}</strong><br/><span>Product ID: ${item.product || 'N/A'}</span></td>
-        <td>${item.size || 'N/A'}</td>
+        <td>${item.size || 'N/A'}${item.color ? `<br/><span>Color: ${item.color}</span>` : ''}</td>
         <td>${item.qty}</td>
         <td>Rs. ${item.price}</td>
         <td>Rs. ${item.price * item.qty}</td>
@@ -949,12 +950,30 @@ function ProfilePageContent() {
                                   <Image src={item.image} alt={item.name} width={32} height={40} className="h-10 w-8 object-cover rounded" />
                                   <div className="flex-grow">
                                     <span className="font-medium truncate max-w-[12rem] block">{item.name}</span>
-                                    <span className="text-[10px] text-gray-400">Qty: {item.qty} | Size: {item.size}</span>
+                                    <span className="text-[10px] text-gray-400">
+                                      Qty: {item.qty} | Size: {item.size}{item.color ? ` | Color: ${item.color}` : ''}
+                                    </span>
                                   </div>
                                   <span className="font-bold">₹{item.price * item.qty}</span>
                                 </div>
                               ))}
                             </div>
+
+                            {order.status === 'Cancelled' && (
+                              <div className="bg-red-50 p-4 rounded-xl border border-red-100 text-xs mt-3">
+                                <div className="font-bold text-red-700 uppercase tracking-wider mb-1">
+                                  Order Cancelled
+                                </div>
+                                {order.cancellationReason && (
+                                  <p className="text-red-700/80">
+                                    <span className="font-semibold">Reason:</span> {order.cancellationReason}
+                                  </p>
+                                )}
+                                {order.cancelledAt && (
+                                  <p className="text-red-700/60 mt-1">Cancelled on {formatDate(order.cancelledAt)}</p>
+                                )}
+                              </div>
+                            )}
 
                             {/* Stepper progress bar */}
                             {renderTrackingStepper(order.trackingSteps || [], order.status)}
@@ -1015,29 +1034,40 @@ function ProfilePageContent() {
                             )}
 
                             {cancellingOrderId === order._id && (
-                              <div className="bg-[#FAF7F2] p-4 rounded-xl border border-brand-primary/20 flex flex-col gap-3 mt-3">
-                                <span className="text-xs font-bold text-gray-800">Reason for Cancellation</span>
-                                <input
-                                  type="text"
-                                  placeholder="e.g. Changed my mind, found another size..."
-                                  value={cancelReason}
-                                  onChange={(e) => setCancelReason(e.target.value)}
-                                  className="w-full bg-white border border-brand-gold/10 rounded-xl px-3 py-2 text-xs focus:outline-none"
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => handleCancelOrder(order._id)}
-                                    className="bg-brand-primary text-white text-[10px] font-bold uppercase px-4 py-2 rounded-lg"
-                                    disabled={actionLoading}
-                                  >
-                                    Confirm Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => setCancellingOrderId(null)}
-                                    className="bg-gray-200 text-gray-700 text-[10px] font-bold uppercase px-4 py-2 rounded-lg"
-                                  >
-                                    Close
-                                  </button>
+                              <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center px-4">
+                                <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-brand-gold/20 p-6">
+                                  <h3 className="font-serif text-xl font-bold text-brand-primary">Cancel Order</h3>
+                                  <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                                    This action is allowed only before shipment. Inventory will be restored after cancellation.
+                                  </p>
+                                  <div className="mt-5">
+                                    <label className="block text-xs font-bold text-gray-800 mb-2">Cancellation reason</label>
+                                    <textarea
+                                      placeholder="e.g. Changed my mind, selected wrong size..."
+                                      value={cancelReason}
+                                      onChange={(e) => setCancelReason(e.target.value)}
+                                      className="w-full bg-[#FAF7F2] border border-brand-gold/20 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-brand-primary h-24 resize-none"
+                                    />
+                                  </div>
+                                  <div className="flex gap-3 mt-5">
+                                    <button
+                                      onClick={() => handleCancelOrder(order._id)}
+                                      className="flex-1 bg-brand-primary text-white text-[10px] font-bold uppercase px-4 py-3 rounded-xl disabled:opacity-60"
+                                      disabled={actionLoading}
+                                    >
+                                      {actionLoading ? 'Cancelling...' : 'Confirm Cancel'}
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        setCancellingOrderId(null);
+                                        setCancelReason('');
+                                      }}
+                                      className="flex-1 bg-gray-100 text-gray-700 text-[10px] font-bold uppercase px-4 py-3 rounded-xl"
+                                      disabled={actionLoading}
+                                    >
+                                      Keep Order
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             )}

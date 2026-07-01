@@ -41,6 +41,8 @@ export default function SellerPage() {
   const [uploading, setUploading] = useState(false);
   const [formImages, setFormImages] = useState([]);
   const [formColors, setFormColors] = useState('');
+  const [colorGalleries, setColorGalleries] = useState([]);
+  const [newColorName, setNewColorName] = useState('');
   const [stockPerSize, setStockPerSize] = useState({});
   const [formData, setFormData] = useState({
     name: '',
@@ -133,6 +135,8 @@ export default function SellerPage() {
     });
     setFormImages([]);
     setFormColors('');
+    setColorGalleries([]);
+    setNewColorName('');
     setStockPerSize({ 'S': 5, 'M': 5, 'L': 5 });
     setEditorOpen(true);
   };
@@ -161,6 +165,13 @@ export default function SellerPage() {
     });
     setFormImages(prod.images || []);
     setFormColors((prod.colors || []).join(', '));
+    setColorGalleries((prod.variantImages || []).map(variant => ({
+      color: variant.color || '',
+      images: variant.images || [],
+      stock: variant.stock ?? '',
+      stockPerSize: variant.stockPerSize || {}
+    })).filter(variant => variant.color));
+    setNewColorName('');
     setStockPerSize(prod.stockPerSize || {});
     setEditorOpen(true);
   };
@@ -179,9 +190,16 @@ export default function SellerPage() {
     }
   };
 
+  const handleColorStockChange = (color, qty) => {
+    setColorGalleries(prev => prev.map(variant => (
+      variant.color === color
+        ? { ...variant, stock: qty === '' ? '' : (parseInt(qty) || 0) }
+        : variant
+    )));
+  };
+
   // Image Upload helper
-  const handleImageUploads = async (e) => {
-    const files = Array.from(e.target.files);
+  const uploadFilesToCloudinary = async (files) => {
     if (files.length === 0) return;
 
     setUploading(true);
@@ -216,12 +234,45 @@ export default function SellerPage() {
         }
       }
 
-      setFormImages(prev => [...prev, ...uploadedUrls]);
+      return uploadedUrls;
     } catch (err) {
       setErrorMsg(err.message || 'Image upload failed. Cloudinary timed out.');
+      return [];
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleImageUploads = async (e) => {
+    const uploadedUrls = await uploadFilesToCloudinary(Array.from(e.target.files));
+    if (uploadedUrls?.length) {
+      setFormImages(prev => [...prev, ...uploadedUrls]);
+    }
+    e.target.value = '';
+  };
+
+  const handleColorImageUploads = async (color, e) => {
+    const uploadedUrls = await uploadFilesToCloudinary(Array.from(e.target.files));
+    if (uploadedUrls?.length) {
+      setColorGalleries(prev => prev.map(variant => (
+        variant.color === color
+          ? { ...variant, images: [...variant.images, ...uploadedUrls] }
+          : variant
+      )));
+    }
+    e.target.value = '';
+  };
+
+  const addColorGallery = () => {
+    const color = newColorName.trim();
+    if (!color) return;
+    if (colorGalleries.some(variant => variant.color.toLowerCase() === color.toLowerCase())) {
+      setErrorMsg('This color already exists.');
+      return;
+    }
+    setColorGalleries(prev => [...prev, { color, images: [], stock: '', stockPerSize: {} }]);
+    setNewColorName('');
+    setErrorMsg('');
   };
 
   // Submit Product Form
@@ -245,13 +296,37 @@ export default function SellerPage() {
       }
     });
 
+    const variantImages = colorGalleries
+      .map(variant => {
+        const normalized = {
+          color: variant.color.trim(),
+          images: (variant.images || []).filter(Boolean),
+          stockPerSize: variant.stockPerSize || {}
+        };
+        if (variant.stock !== '' && variant.stock !== undefined && variant.stock !== null) {
+          normalized.stock = parseInt(variant.stock) || 0;
+        }
+        return normalized;
+      })
+      .filter(variant => variant.color && variant.images.length > 0);
+    if (variantImages.some(variant => variant.stock !== undefined)) {
+      totalStock = variantImages.reduce((acc, variant) => acc + (parseInt(variant.stock) || 0), 0);
+    }
+    const colors = variantImages.length
+      ? variantImages.map(variant => variant.color)
+      : (formColors ? formColors.split(',').map(c => c.trim()).filter(Boolean) : []);
+    const primaryImages = variantImages.length
+      ? variantImages.flatMap(variant => variant.images)
+      : formImages;
+
     const payload = {
       ...formData,
       price: Number(formData.price),
       discountPrice: formData.discountPrice ? Number(formData.discountPrice) : 0,
       tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      colors: formColors ? formColors.split(',').map(c => c.trim()).filter(Boolean) : [],
-      images: formImages.length ? formImages : ['/logo.png'],
+      colors,
+      images: primaryImages.length ? primaryImages : ['/logo.png'],
+      variantImages,
       stockPerSize,
       stock: totalStock,
       sizes: activeSizes.length > 0 ? activeSizes : ['Free Size']
@@ -619,6 +694,9 @@ export default function SellerPage() {
                             </div>
                             <div className="min-w-0">
                               <p className="text-xs font-serif font-semibold text-brand-primary line-clamp-1">{item.name}</p>
+                              {item.color && (
+                                <p className="text-[10px] text-gray-500 font-light">Color: {item.color}</p>
+                              )}
                               <p className="text-[10px] text-gray-500 font-light">Size: {item.size} • Qty: {item.qty} • ₹{item.price}</p>
                             </div>
                           </div>
@@ -640,6 +718,7 @@ export default function SellerPage() {
                           <option value="Shipped">Shipped / Dispatched</option>
                           <option value="Out For Delivery">Out For Delivery</option>
                           <option value="Delivered">Delivered</option>
+                          <option value="Returned">Returned</option>
                           <option value="Cancelled">Cancelled</option>
                         </select>
                       </div>
@@ -1039,6 +1118,87 @@ export default function SellerPage() {
                       placeholder="e.g. Dry clean only. Wash separately in cold water."
                       className="w-full bg-gray-50 border border-brand-gold/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800"
                     />
+                  </div>
+
+                  <div className="border-t border-brand-gold/10 pt-4">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-2.5">Color Image Galleries</label>
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        value={newColorName}
+                        onChange={(e) => setNewColorName(e.target.value)}
+                        placeholder="Add color name e.g. Red, Green"
+                        className="flex-1 bg-gray-50 border border-brand-gold/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={addColorGallery}
+                        className="bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-4 rounded-lg"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      {colorGalleries.map((variant) => (
+                        <div key={variant.color} className="rounded-xl border border-brand-gold/10 p-3 bg-[#FAF7F2] shadow-inner">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs font-bold text-brand-primary">{variant.color}</span>
+                            <button
+                              type="button"
+                              onClick={() => setColorGalleries(prev => prev.filter(item => item.color !== variant.color))}
+                              className="text-red-400 hover:text-red-600"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <label className="mb-3 block">
+                            <span className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-gray-500">Color Stock</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={variant.stock ?? ''}
+                              onChange={(e) => handleColorStockChange(variant.color, e.target.value)}
+                              placeholder="Optional"
+                              className="w-32 bg-white border border-brand-gold/15 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-brand-primary text-gray-800"
+                            />
+                          </label>
+                          <div className="flex flex-wrap gap-3">
+                            {variant.images.map((img, idx) => (
+                              <div key={`${variant.color}-${idx}`} className="relative h-24 w-20 rounded-lg border border-brand-gold/10 overflow-hidden group shadow-sm">
+                                <img src={img} className="h-full w-full object-cover" alt="" />
+                                <button
+                                  type="button"
+                                  onClick={() => setColorGalleries(prev => prev.map(item => (
+                                    item.color === variant.color
+                                      ? { ...item, images: item.images.filter((_, imageIdx) => imageIdx !== idx) }
+                                      : item
+                                  )))}
+                                  className="absolute right-1 top-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            ))}
+                            <label className="h-24 w-20 rounded-lg border border-dashed border-brand-gold/30 hover:border-brand-primary flex flex-col items-center justify-center cursor-pointer text-gray-400 hover:text-brand-primary transition-all bg-white hover:bg-brand-cream">
+                              {uploading ? <RefreshCcw size={20} className="animate-spin text-brand-primary" /> : <Plus size={20} className="text-brand-gold" />}
+                              <span className="text-[9px] mt-1 font-bold uppercase tracking-wider">Images</span>
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={(e) => handleColorImageUploads(variant.color, e)}
+                                className="hidden"
+                                disabled={uploading}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                      {colorGalleries.length === 0 && (
+                        <p className="text-xs text-gray-500">Add color galleries so customers see the correct images for each selected color.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
